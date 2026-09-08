@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { MedicineService, localDateString } from '../services/medicineService';
-import { ShoppingItem, ShoppingStatus } from '../types';
+import { MedicineService, localDateString } from '../../../services/medicineService';
+import { ShoppingItem, ShoppingStatus } from '../../../types';
 
 const ShoppingList: React.FC = () => {
   const [items, setItems] = useState<ShoppingItem[]>([]);

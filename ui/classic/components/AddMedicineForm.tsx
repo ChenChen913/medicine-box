@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { FormType, Medicine } from '../types';
-import { MedicineService, todayDateString } from '../services/medicineService';
+import { FormType, Medicine } from '../../../types';
+import { MedicineService, todayDateString } from '../../../services/medicineService';
 
 interface Props {
   onClose: () => void;

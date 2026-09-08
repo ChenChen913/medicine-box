@@ -5,8 +5,8 @@
  */
 
 import React from 'react';
-import { FormType, Medicine } from '../types';
-import { todayDateString } from '../services/medicineService';
+import { FormType, Medicine } from '../../../types';
+import { todayDateString } from '../../../services/medicineService';
 
 interface Props {
   medicine: Medicine;

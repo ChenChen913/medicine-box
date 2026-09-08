@@ -9,6 +9,8 @@ export default {
     './App.tsx',
     './components/**/*.{ts,tsx}',
     './services/**/*.{ts,tsx}',
+    './ui/**/*.{ts,tsx}',
+    './modern/**/*.{ts,tsx}',
   ],
   theme: {
     extend: {},
