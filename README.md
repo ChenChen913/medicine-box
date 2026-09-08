@@ -1,20 +1,39 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# 家庭智慧药箱
 
-# Run and deploy your AI Studio app
+一个基于 React + Vite + TypeScript 构建的「家庭智慧药箱」单页应用，支持药品库存管理、过期提醒、补货清单与用药记录。
 
-This contains everything you need to run your app locally.
+**在线访问地址：** https://chenchen913.github.io/smart-medicine-box/
 
-View your app in AI Studio: https://ai.studio/apps/drive/1CgUvThpqzhQkkyFNwBNTuUHz8Rew14Oe
+---
 
-## Run Locally
+## 技术架构
 
-**Prerequisites:**  Node.js
+- **前端**：React 18 + Vite 5 + TailwindCSS CDN
+- **数据持久化**：Supabase（Postgres + Row Level Security）
+- **降级方案**：当未配置 Supabase 环境变量时，自动降级为浏览器 localStorage（单机可用，换设备不丢失需配置云端）
+- **部署**：GitHub Actions → GitHub Pages（免费）
 
+---
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## 本地开发
+
+```bash
+npm install
+npm run dev
+```
+
+应用会在 `http://localhost:5173` 启动。
+
+> 如果你需要连接自己的 Supabase 项目，把 `.env.example` 复制为 `.env.local`，填入你的 `VITE_SUPABASE_URL` 和 `VITE_SUPABASE_ANON_KEY`。
+
+---
+
+## Supabase 建库
+
+进入 `supabase/schema.sql`，整段粘贴到你的 Supabase SQL Editor 执行即可。建完三张表并启用 RLS 策略后，你的数据就能在多设备间实时同步。
+
+---
+
+## 部署说明
+
+每次推送 `main` 分支时，`.github/workflows/deploy.yml` 会自动构建并发布到 GitHub Pages，无需手动操作。
