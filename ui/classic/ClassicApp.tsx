@@ -181,9 +181,12 @@ function App() {
       <header className="bg-white shadow-sm sticky top-0 z-20 border-b border-slate-100">
         <div className="max-w-6xl mx-auto px-4 py-4 md:py-5 flex justify-between items-center">
           <div className="flex items-center gap-3 md:gap-4 cursor-pointer" onClick={() => { setFilterType('all'); setSearchQuery(''); setActiveTab('home'); }}>
-             <div className="w-10 h-10 md:w-12 md:h-12 bg-emerald-500 rounded-xl md:rounded-2xl flex items-center justify-center text-white font-bold text-xl md:text-2xl shadow-lg shadow-emerald-200">
-               💊
-             </div>
+             {/* 品牌图标：与 favicon / 新版 UI 顶栏同源，替换原 emoji 占位 */}
+             <img
+               src={`${import.meta.env.BASE_URL}favicon.svg`}
+               alt="家庭药箱"
+               className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl shadow-lg"
+             />
              <div>
                <h1 className="font-bold text-xl md:text-2xl text-slate-800 leading-none tracking-tight">家庭药箱</h1>
                <p className="text-xs md:text-sm text-slate-400 mt-1 font-medium">家庭健康管家</p>

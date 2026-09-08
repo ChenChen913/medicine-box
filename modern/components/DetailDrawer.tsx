@@ -1,7 +1,8 @@
 /**
  * 文件名: modern/components/DetailDrawer.tsx
- * 功能: 药品详情抽屉（新版 UI）
- * 描述: 对应设计稿的右侧滑出详情（桌面）/ 底部弹层（移动端）。
+ * 功能: 药品详情弹窗（新版 UI）
+ * 描述: 屏幕正中央的居中弹窗（桌面/移动统一），内部可上下滑动，
+ *       点击空白遮罩即可关闭 —— 适合单手操作。
  *       全部展示真实数据：库存、效期、用法、禁忌、位置、适应症、
  *       该药最近打卡时间线（usage_logs）；
  *       「30 天库存消耗趋势」由当前库存 + 打卡记录反推估算（无记录时优雅降级）。
@@ -84,21 +85,17 @@ export const DetailDrawer: React.FC<Props> = ({ med, logs, onClose, onConsume, o
 
   return (
     <>
-      {/* 背景遮罩 */}
+      {/* 背景遮罩：点击空白处直接关闭（单手友好） */}
       <div className="fixed inset-0 bg-m3-on-surface/30 backdrop-blur-[2px] z-[60] animate-in fade-in duration-200" onClick={onClose} />
 
-      <aside
-        className="fixed z-[61] bg-m3-surface-container-lowest shadow-2xl flex flex-col overflow-hidden animate-in fade-in duration-300
-                   inset-x-0 bottom-0 max-h-[88vh] rounded-t-3xl
-                   md:inset-y-0 md:left-auto md:right-0 md:w-[480px] md:max-h-none md:rounded-t-none md:slide-in-from-right"
-        role="dialog"
-        aria-modal="true"
-        aria-label={`${med.name} 详情`}
-      >
-        {/* 移动端拖拽指示条 */}
-        <div className="md:hidden pt-2.5 pb-1 flex justify-center bg-m3-surface-container-lowest">
-          <span className="w-10 h-1 rounded-full bg-m3-outline-variant" />
-        </div>
+      {/* 居中弹窗容器：pointer-events-none 让空白区域点击穿透到遮罩 */}
+      <div className="fixed inset-0 z-[61] flex items-center justify-center p-4 pointer-events-none">
+        <div
+          className="pointer-events-auto relative w-full max-w-lg max-h-[86vh] bg-m3-surface-container-lowest rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${med.name} 详情`}
+        >
 
         {/* 头部 */}
         <div className="px-5 md:px-6 py-4 border-b border-m3-surface-container-low flex items-center justify-between gap-3 shrink-0">
@@ -128,10 +125,15 @@ export const DetailDrawer: React.FC<Props> = ({ med, logs, onClose, onConsume, o
         </div>
 
         {/* 可滚动内容 */}
-        <div className="px-5 md:px-6 py-5 overflow-y-auto flex flex-col gap-5 flex-1 min-h-0">
-          {/* 用户上传图片（仅 base64 本地图，外链一律不请求） */}
-          {med.image_url && med.image_url.startsWith('data:') && (
+        <div className="px-5 md:px-6 py-5 overflow-y-auto flex flex-col gap-5 flex-1 min-h-0 overscroll-contain">
+          {/* 用户上传图片（仅 base64 本地图，外链一律不请求）；无图时展示优雅占位 */}
+          {med.image_url && med.image_url.startsWith('data:') ? (
             <img src={med.image_url} alt={med.name} className="w-full h-40 object-cover rounded-2xl bg-m3-surface-container-low" />
+          ) : (
+            <div className="w-full h-28 rounded-2xl bg-gradient-to-br from-m3-primary-fixed/30 via-m3-surface-container-low to-m3-secondary-fixed/30 flex flex-col items-center justify-center gap-1.5 text-m3-outline">
+              <Icon name={meta.icon} className="w-8 h-8 opacity-70" />
+              <span className="text-xs font-medium">暂无实物图片</span>
+            </div>
           )}
 
           {/* 库存 / 效期双卡 */}
@@ -234,7 +236,8 @@ export const DetailDrawer: React.FC<Props> = ({ med, logs, onClose, onConsume, o
             <span>打卡服药</span>
           </button>
         </div>
-      </aside>
+        </div>
+      </div>
     </>
   );
 };

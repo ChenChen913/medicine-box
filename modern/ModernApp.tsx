@@ -180,9 +180,12 @@ const ModernApp: React.FC = () => {
 
   const Logo = (
     <div className="flex items-center gap-2.5">
-      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-m3-primary to-m3-primary-container flex items-center justify-center text-m3-on-primary shadow-[0_2px_8px_rgba(15,118,110,0.25)]">
-        <Icon name="medication" className="w-5 h-5" />
-      </div>
+      {/* 品牌图标：与 favicon / PWA 安装图标同源（public/favicon.svg） */}
+      <img
+        src={`${import.meta.env.BASE_URL}favicon.svg`}
+        alt="家庭药箱"
+        className="w-10 h-10 rounded-xl shadow-[0_2px_8px_rgba(15,118,110,0.25)]"
+      />
       <div className="flex flex-col leading-none text-left">
         <span className="text-lg font-bold text-m3-on-surface tracking-tight">家庭药箱</span>
         <span className="text-[11px] text-m3-on-surface-variant font-medium mt-1">家庭健康管家</span>
@@ -315,9 +318,11 @@ const ModernApp: React.FC = () => {
           {/* 页脚 */}
           <footer className="mt-12 md:mt-16 pt-6 border-t border-m3-surface-container-low flex flex-col sm:flex-row items-center justify-between gap-2 pb-4">
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded bg-m3-primary text-m3-on-primary flex items-center justify-center">
-                <Icon name="medical_services" className="w-3.5 h-3.5" />
-              </div>
+              <img
+                src={`${import.meta.env.BASE_URL}favicon.svg`}
+                alt=""
+                className="w-6 h-6 rounded-md"
+              />
               <span className="text-sm font-semibold text-m3-on-surface">家庭药箱</span>
               <span className="text-xs text-m3-on-surface-variant ml-1">温润守护每一位家人的常备与急救用药</span>
             </div>
