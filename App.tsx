@@ -8,20 +8,13 @@
  */
 
 import { UIModeProvider, useUIMode } from './ui/UIMode';
-import UISwitcher from './ui/UISwitcher';
 import ClassicApp from './ui/classic/ClassicApp';
 import ModernApp from './modern/ModernApp';
 
 function UIShell() {
   const { mode } = useUIMode();
-  return (
-    <>
-      {mode === 'modern' ? <ModernApp /> : <ClassicApp />}
-      {/* 切换入口统一渲染，保证两套 UI 下都能一键互切。
-          bottom-24 同时避开 classic 移动端流内导航与 modern 移动端悬浮导航 */}
-      <UISwitcher bottomClass="bottom-24 md:bottom-6" />
-    </>
-  );
+  // 切换按钮由各 UI 自行渲染（位置需适配各自的底部导航与弹层布局）
+  return mode === 'modern' ? <ModernApp /> : <ClassicApp />;
 }
 
 function App() {

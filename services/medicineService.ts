@@ -530,6 +530,41 @@ export const MedicineService = {
     return data?.shoppingList ?? [];
   },
 
+  /**
+   * 手动把药品加入补货清单（新 UI 的「加入待购」「一键生成采购单」使用）。
+   * 幂等：同名药品已有待补货条目时跳过，返回实际新增条数。
+   */
+  addToShoppingList: async (entries: { name: string; reason: ShoppingItem['reason'] }[]): Promise<number> => {
+    const data = await readDB();
+    if (!data) return 0;
+
+    let added = 0;
+    entries.forEach(({ name, reason }) => {
+      const exists = data.shoppingList.find(
+        item => item.medicine_name === name && item.status === ShoppingStatus.PENDING
+      );
+      if (!exists) {
+        data.shoppingList.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          medicine_name: name,
+          reason,
+          status: ShoppingStatus.PENDING,
+          created_at: new Date().toISOString(),
+        });
+        added += 1;
+      }
+    });
+
+    if (added > 0) await writeDB(data);
+    return added;
+  },
+
+  /** 读取全部用药记录（新 UI 的打卡时间线 / 用药记录页使用），按时间倒序 */
+  getUsageLogs: async (): Promise<UsageLog[]> => {
+    const data = await readDB();
+    return [...(data?.logs ?? [])].sort((a, b) => b.log_time.localeCompare(a.log_time));
+  },
+
   // --- 排序算法 (纯函数，无需异步；分类权重复用模块级 getCategoryWeight) ---
   sortMedicines: (medicines: Medicine[]): Medicine[] => {
     return [...medicines].sort((a, b) => {

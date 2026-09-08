@@ -1,7 +1,8 @@
 /**
- * 文件名: App.tsx
- * 功能: 应用主入口
- * 描述: 增加搜索功能，适配异步数据加载。
+ * 文件名: ui/classic/ClassicApp.tsx
+ * 功能: 经典版 UI 主入口（原 App.tsx 原样保留）
+ * 描述: 双 UI 架构下的经典版视图层，逻辑与视觉不做任何变更；
+ *       仅新增右上角以外的浮动切换入口，便于随时切到新版界面。
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -10,6 +11,7 @@ import { MedicineService, todayDateString, getCategoryWeight } from '../../servi
 import MedicineCard from './components/MedicineCard';
 import ShoppingList from './components/ShoppingList';
 import AddMedicineForm from './components/AddMedicineForm';
+import UISwitcher from '../UISwitcher';
 
 // --- 图标组件 ---
 const IconHome = () => <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>;
@@ -173,6 +175,7 @@ function App() {
 
   return (
     <div className="h-dvh flex flex-col overflow-hidden font-sans text-slate-800 bg-slate-50">
+      <UISwitcher bottomClass="bottom-24 md:bottom-6" />
       
       {/* --- 顶部导航栏 --- */}
       <header className="bg-white shadow-sm sticky top-0 z-20 border-b border-slate-100">
