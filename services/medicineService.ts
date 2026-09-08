@@ -518,12 +518,12 @@ export const MedicineService = {
     const data = await readDB();
     if (!data) return;
 
-    const today = new Date();
+    // 用本地日期字符串比较，避免 new Date('YYYY-MM-DD') 按 UTC 解析造成的时区误差
+    const today = todayDateString();
     let hasChanges = false;
 
     medicines.forEach(med => {
-      const expDate = new Date(med.expiry_date);
-      if (expDate < today) {
+      if (med.expiry_date && med.expiry_date < today) {
          const exists = data.shoppingList.find(item => item.medicine_name === med.name && item.status === ShoppingStatus.PENDING);
          if (!exists) {
            data.shoppingList.push({
@@ -547,6 +547,17 @@ export const MedicineService = {
     const data = await readDB();
     if (!data) return;
     data.medicines.push(med);
+    await writeDB(data);
+  },
+
+  // 编辑药品：用传入对象整体替换原记录（按 id 匹配），保留原 id
+  updateMedicine: async (med: Medicine) => {
+    const data = await readDB();
+    if (!data) return;
+    const targetId = String(med.id).trim();
+    const idx = data.medicines.findIndex(m => String(m.id).trim() === targetId);
+    if (idx === -1) return;
+    data.medicines[idx] = { ...med, id: data.medicines[idx].id };
     await writeDB(data);
   },
 

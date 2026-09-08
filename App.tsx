@@ -27,6 +27,8 @@ function App() {
   const [consumeMedId, setConsumeMedId] = useState<string | null>(null);
   const [consumeAmount, setConsumeAmount] = useState<number>(1);
   const [showAddForm, setShowAddForm] = useState(false);
+  // 编辑模式：记录正在编辑的药品；null 表示表单为新建模式
+  const [editingMed, setEditingMed] = useState<Medicine | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   // 详情弹窗图片加载失败标记（外链图片在部分手机网络下不可达，失败时降级为 emoji 占位）
   const [detailImageFailed, setDetailImageFailed] = useState(false);
@@ -151,7 +153,7 @@ function App() {
           </div>
           
           <button 
-            onClick={() => setShowAddForm(true)}
+            onClick={() => { setEditingMed(null); setShowAddForm(true); }}
             className="hidden md:flex bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-700 transition-colors items-center gap-2 shadow-md">
             <span>+ 入库新药</span>
           </button>
@@ -246,7 +248,7 @@ function App() {
         </button>
          <div className="relative -top-6">
            <button 
-             onClick={() => setShowAddForm(true)}
+             onClick={() => { setEditingMed(null); setShowAddForm(true); }}
              className="w-16 h-16 bg-emerald-500 rounded-full text-white flex items-center justify-center shadow-lg shadow-emerald-200 active:scale-95 transition-transform border-4 border-slate-50">
              <IconAdd />
            </button>
@@ -267,7 +269,9 @@ function App() {
             <button className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-black/10 text-slate-600 hover:bg-black/20 z-10" onClick={() => setSelectedMed(null)}>✕</button>
             
             <div className="relative h-64 bg-slate-100">
-               {selectedMed.image_url && !detailImageFailed ? (
+               {/* 只渲染本地 base64 图片（用户上传）。旧数据可能残留外链地址，
+                   在部分手机网络下不可达，会导致破图或长时间空白，因此一律不请求 */}
+               {selectedMed.image_url && selectedMed.image_url.startsWith('data:') && !detailImageFailed ? (
                  <img src={selectedMed.image_url} className="w-full h-full object-cover" alt={selectedMed.name} onError={() => setDetailImageFailed(true)} />
                ) : (
                  /* 无图片或图片加载失败时，用本地渐变占位（与卡片 emoji 风格一致），避免出现破图 */
@@ -311,13 +315,30 @@ function App() {
               </div>
               
               <div className="pt-6 mt-4 border-t border-slate-100 flex justify-between items-center">
-                 <button 
-                    type="button" 
-                    onClick={(e) => onRequestDelete(e, selectedMed.id)}
-                    className="text-red-500 text-sm font-bold bg-red-50 px-4 py-2 rounded-lg hover:bg-red-100 transition-colors cursor-pointer border border-red-100"
-                 >
-                    删除此药
-                 </button>
+                 {/* 编辑与删除并列放置 */}
+                 <div className="flex gap-3">
+                   <button 
+                      type="button" 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const med = selectedMed;
+                        setSelectedMed(null);      // 关闭详情，避免弹窗叠层
+                        setEditingMed(med);
+                        setShowAddForm(true);      // 打开预填的编辑表单
+                      }}
+                      className="text-emerald-600 text-sm font-bold bg-emerald-50 px-4 py-2 rounded-lg hover:bg-emerald-100 transition-colors cursor-pointer border border-emerald-100"
+                   >
+                      编辑信息
+                   </button>
+                   <button 
+                      type="button" 
+                      onClick={(e) => onRequestDelete(e, selectedMed.id)}
+                      className="text-red-500 text-sm font-bold bg-red-50 px-4 py-2 rounded-lg hover:bg-red-100 transition-colors cursor-pointer border border-red-100"
+                   >
+                      删除此药
+                   </button>
+                 </div>
                  <div className="text-right text-xs text-slate-400 space-y-1">
                    <div>过期: <span className="font-mono">{selectedMed.expiry_date}</span></div>
                    <div>购买: <span className="font-mono">{selectedMed.last_purchase_date}</span></div>
@@ -369,7 +390,12 @@ function App() {
       )}
 
       {showAddForm && (
-        <AddMedicineForm onClose={() => setShowAddForm(false)} onSuccess={() => { setShowAddForm(false); refreshData(); }} />
+        <AddMedicineForm 
+          key={editingMed ? `edit-${editingMed.id}` : 'add-new'}
+          editingMed={editingMed ?? undefined} 
+          onClose={() => { setShowAddForm(false); setEditingMed(null); }} 
+          onSuccess={() => { setShowAddForm(false); setEditingMed(null); refreshData(); }} 
+        />
       )}
     </div>
   );

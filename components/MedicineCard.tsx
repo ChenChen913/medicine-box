@@ -114,8 +114,8 @@ const MedicineCard: React.FC<Props> = ({ medicine, onConsume, onDetail }) => {
       </div>
 
       <div className={`flex p-5 gap-5 flex-1 cursor-pointer ${contentOpacity}`} onClick={() => onDetail(medicine)}>
-        {/* 图标区域 */}
-        <div className={`w-28 h-28 flex-shrink-0 rounded-2xl flex items-center justify-center text-6xl shadow-inner border ${iconBg}`}>
+        {/* 图标区域：不设固定高度，随右侧内容自动拉伸撑满整列，消除下方空白 */}
+        <div className={`w-24 self-stretch min-h-24 flex-shrink-0 rounded-2xl flex items-center justify-center text-6xl shadow-inner border ${iconBg}`}>
            {getIcon(medicine)}
         </div>
 

@@ -5,6 +5,8 @@ import { MedicineService } from '../services/medicineService';
 interface Props {
   onClose: () => void;
   onSuccess: () => void;
+  // 传入时为编辑模式：表单预填该药品信息，提交走 updateMedicine；不传则新建
+  editingMed?: Medicine;
 }
 
 const CATEGORIES = [
@@ -17,20 +19,33 @@ const UNITS = [
   '粒', '片', '盒', '袋', '瓶', '支', 'ml', '包', '克'
 ];
 
-const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess }) => {
-  const [dosageFreq, setDosageFreq] = useState<string>('1');
-  const [dosageAmount, setDosageAmount] = useState<string>('1');
+// 从 "每日X次，每次Y单位" 格式的说明中解析频次，解析失败返回空（保留自由文本）
+function parseDosage(instruction: string): { freq: string; amount: string } {
+  const m = /每日(\d+(\.\d+)?)次，每次(\d+(\.\d+)?)/.exec(instruction || '');
+  return m ? { freq: m[1], amount: m[3] } : { freq: '', amount: '' };
+}
 
-  const [formData, setFormData] = useState<Partial<Medicine>>({
-    form_type: FormType.TABLET,
-    total_quantity: 1,
-    unit: '粒',
-    category: '感冒药',
-    threshold: 5,
-    daily_usage: 0,
-    usage_frequency_score: 0
-  });
-  const [previewImage, setPreviewImage] = useState<string>('');
+const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess, editingMed }) => {
+  // 编辑模式：从原服用说明解析出频次预填，便于直接微调
+  const initialDosage = editingMed ? parseDosage(editingMed.dosage_instruction) : { freq: '1', amount: '1' };
+  const [dosageFreq, setDosageFreq] = useState<string>(initialDosage.freq);
+  const [dosageAmount, setDosageAmount] = useState<string>(initialDosage.amount);
+
+  const [formData, setFormData] = useState<Partial<Medicine>>(
+    editingMed ? { ...editingMed } : {
+      form_type: FormType.TABLET,
+      total_quantity: 1,
+      unit: '粒',
+      category: '感冒药',
+      threshold: 5,
+      daily_usage: 0,
+      usage_frequency_score: 0
+    }
+  );
+  // 图片预览只认本地 base64；旧数据里可能残留外链地址，不预览也不展示
+  const [previewImage, setPreviewImage] = useState<string>(
+    editingMed?.image_url && editingMed.image_url.startsWith('data:') ? editingMed.image_url : ''
+  );
 
   // 图片最大 2MB：base64 直接存 localStorage / 数据库，过大易撑爆存储配额
   const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
@@ -61,12 +76,13 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess }) => {
     }
 
     let estimatedDaily = Number(formData.daily_usage);
-    if (!estimatedDaily && dosageFreq && dosageAmount) {
+    if (dosageFreq && dosageAmount) {
+      // 频次/用量有效时以它们为准（新建时初始为 0 也走这里）
       estimatedDaily = parseFloat(dosageFreq) * parseFloat(dosageAmount);
     }
 
-    const newMed: Medicine = {
-      id: Date.now().toString(),
+    // 公共字段：新建与编辑共用；编辑时未填的字段回落到原值
+    const common = {
       name: formData.name || '未命名',
       category: formData.category || '其他',
       location: formData.location || '未知',
@@ -74,18 +90,33 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess }) => {
       total_quantity: Number(formData.total_quantity) || 0,
       unit: formData.unit || '粒',
       threshold: Number(formData.threshold) || 0,
-      expiry_date: formData.expiry_date || new Date().toISOString().split('T')[0],
-      last_purchase_date: formData.last_purchase_date || new Date().toISOString().split('T')[0],
+      expiry_date: formData.expiry_date || editingMed?.expiry_date || new Date().toISOString().split('T')[0],
+      last_purchase_date: formData.last_purchase_date || editingMed?.last_purchase_date || new Date().toISOString().split('T')[0],
       symptoms_treated: formData.symptoms_treated || '',
       dosage_instruction: finalDosage,
-      daily_usage: estimatedDaily,
+      daily_usage: estimatedDaily || 0,
       side_effects: formData.side_effects || '详见说明书',
-      image_url: formData.image_url,
+      image_url: formData.image_url ?? editingMed?.image_url,
       form_type: formData.form_type as FormType,
-      usage_frequency_score: 0
     };
 
-    await MedicineService.addMedicine(newMed);
+    if (editingMed) {
+      // 编辑：整体替换原记录，保留原 id 和使用频率分数
+      const updated: Medicine = {
+        ...editingMed,
+        ...common,
+        id: editingMed.id,
+        usage_frequency_score: editingMed.usage_frequency_score
+      };
+      await MedicineService.updateMedicine(updated);
+    } else {
+      const newMed: Medicine = {
+        id: Date.now().toString(),
+        ...common,
+        usage_frequency_score: 0
+      };
+      await MedicineService.addMedicine(newMed);
+    }
     onSuccess();
   };
 
@@ -96,7 +127,7 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess }) => {
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
       <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
         <div className="p-4 border-b border-slate-100 sticky top-0 bg-white z-10 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-slate-800">添加新药品</h2>
+          <h2 className="text-xl font-bold text-slate-800">{editingMed ? '编辑药品信息' : '添加新药品'}</h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
         </div>
 
@@ -218,7 +249,7 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess }) => {
 
           <div className="pt-4">
             <button type="submit" className="w-full bg-emerald-600 text-white font-bold text-lg py-3.5 rounded-xl shadow-lg shadow-emerald-200 active:scale-[0.98] transition-transform hover:bg-emerald-700">
-              确认入库
+              {editingMed ? '保存修改' : '确认入库'}
             </button>
           </div>
         </form>
