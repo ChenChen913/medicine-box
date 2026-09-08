@@ -28,6 +28,8 @@ function App() {
   const [consumeAmount, setConsumeAmount] = useState<number>(1);
   const [showAddForm, setShowAddForm] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  // 详情弹窗图片加载失败标记（外链图片在部分手机网络下不可达，失败时降级为 emoji 占位）
+  const [detailImageFailed, setDetailImageFailed] = useState(false);
 
   // 异步加载数据
   const refreshData = async () => {
@@ -128,7 +130,7 @@ function App() {
   }, [medicines]);
 
   return (
-    <div className="min-h-screen flex flex-col font-sans text-slate-800 bg-slate-50">
+    <div className="h-dvh flex flex-col overflow-hidden font-sans text-slate-800 bg-slate-50">
       
       {/* --- 顶部导航栏 --- */}
       <header className="bg-white shadow-sm sticky top-0 z-20 border-b border-slate-100">
@@ -157,10 +159,11 @@ function App() {
       </header>
 
       {/* --- 主要内容区域 --- */}
-      <main className="flex-1 overflow-y-auto">
+      {/* 内容区：flex-1 + min-h-0 让它占满 header/nav 之间的剩余高度，滚动只发生在这里 */}
+      <main className="flex-1 min-h-0 overflow-y-auto">
         
         {activeTab === 'home' && (
-          <div className="p-4 pb-28 md:pb-10 max-w-6xl mx-auto">
+          <div className="p-4 md:pb-10 max-w-6xl mx-auto">
             
             {/* 搜索框 (新增) */}
             <div className="mb-6 relative max-w-xl mx-auto">
@@ -217,7 +220,7 @@ function App() {
                         key={med.id} 
                         medicine={med} 
                         onConsume={(id) => setConsumeMedId(id)}
-                        onDetail={(med) => setSelectedMed(med)}
+                        onDetail={(med) => { setSelectedMed(med); setDetailImageFailed(false); }}
                       />
                     ))}
                   </div>
@@ -232,8 +235,9 @@ function App() {
         )}
       </main>
 
-      {/* --- 底部导航栏 (手机端) --- */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around items-center h-20 z-30 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+      {/* --- 底部导航栏 (仅移动端显示) --- */}
+      {/* 改为 flex 流内布局：不随内容滚动消失（原 fixed 定位在移动端惯性滚动期间会被浏览器丢弃渲染） */}
+      <nav className="md:hidden shrink-0 bg-white border-t border-slate-200 flex justify-around items-center h-20 z-30 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         <button 
           onClick={() => { setActiveTab('home'); setFilterType('all'); }}
           className={`flex flex-col items-center justify-center w-full h-full ${activeTab === 'home' ? 'text-emerald-600' : 'text-slate-400'}`}>
@@ -263,10 +267,10 @@ function App() {
             <button className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-black/10 text-slate-600 hover:bg-black/20 z-10" onClick={() => setSelectedMed(null)}>✕</button>
             
             <div className="relative h-64 bg-slate-100">
-               {selectedMed.image_url ? (
-                 <img src={selectedMed.image_url} className="w-full h-full object-cover" alt={selectedMed.name} />
+               {selectedMed.image_url && !detailImageFailed ? (
+                 <img src={selectedMed.image_url} className="w-full h-full object-cover" alt={selectedMed.name} onError={() => setDetailImageFailed(true)} />
                ) : (
-                 /* 无图片时用本地渐变占位，避免依赖不稳定的第三方占位图服务 */
+                 /* 无图片或图片加载失败时，用本地渐变占位（与卡片 emoji 风格一致），避免出现破图 */
                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-emerald-100 via-teal-100 to-cyan-100 text-7xl">
                    💊
                  </div>

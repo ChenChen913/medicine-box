@@ -14,7 +14,6 @@ const INITIAL_MEDICINES: Medicine[] = [
   {
     id: '1',
     name: '布洛芬缓释胶囊 (芬必得)',
-    image_url: 'https://picsum.photos/300/300?random=1',
     form_type: FormType.CAPSULE,
     category: '止痛药',
     location: '客厅医药箱第一层',
@@ -32,7 +31,6 @@ const INITIAL_MEDICINES: Medicine[] = [
   {
     id: '2',
     name: '感冒灵颗粒',
-    image_url: 'https://picsum.photos/300/300?random=2',
     form_type: FormType.GRANULE,
     category: '感冒药',
     location: '客厅医药箱第二层',
@@ -50,7 +48,6 @@ const INITIAL_MEDICINES: Medicine[] = [
   {
     id: '3',
     name: '阿莫西林胶囊',
-    image_url: 'https://picsum.photos/300/300?random=3',
     form_type: FormType.CAPSULE,
     category: '抗生素',
     location: '主卧抽屉',
@@ -68,7 +65,6 @@ const INITIAL_MEDICINES: Medicine[] = [
   {
     id: '4',
     name: '蒙脱石散 (思密达)',
-    image_url: 'https://picsum.photos/300/300?random=4',
     form_type: FormType.GRANULE,
     category: '肠胃药',
     location: '客厅医药箱',
@@ -86,7 +82,6 @@ const INITIAL_MEDICINES: Medicine[] = [
   {
     id: '5',
     name: '碘伏消毒液',
-    image_url: 'https://picsum.photos/300/300?random=5',
     form_type: FormType.LIQUID,
     category: '外用药',
     location: '急救包',
@@ -104,7 +99,6 @@ const INITIAL_MEDICINES: Medicine[] = [
   {
     id: '6',
     name: '创可贴',
-    image_url: 'https://picsum.photos/300/300?random=6',
     form_type: FormType.OTHER,
     category: '医疗器械',
     location: '玄关杂物盒',
@@ -122,7 +116,6 @@ const INITIAL_MEDICINES: Medicine[] = [
   {
     id: '7',
     name: '维生素C泡腾片',
-    image_url: 'https://picsum.photos/300/300?random=7',
     form_type: FormType.TABLET,
     category: '保健品',
     location: '厨房柜子',
@@ -140,7 +133,6 @@ const INITIAL_MEDICINES: Medicine[] = [
   {
     id: '8',
     name: '氯雷他定片 (开瑞坦)',
-    image_url: 'https://picsum.photos/300/300?random=8',
     form_type: FormType.TABLET,
     category: '抗过敏',
     location: '卧室抽屉',
@@ -158,7 +150,6 @@ const INITIAL_MEDICINES: Medicine[] = [
   {
     id: '9',
     name: '藿香正气水',
-    image_url: 'https://picsum.photos/300/300?random=9',
     form_type: FormType.LIQUID,
     category: '肠胃药',
     location: '客厅医药箱',
@@ -176,7 +167,6 @@ const INITIAL_MEDICINES: Medicine[] = [
   {
     id: '10',
     name: '人工泪液滴眼液',
-    image_url: 'https://picsum.photos/300/300?random=10',
     form_type: FormType.OTHER,
     category: '眼科',
     location: '书房桌面',
@@ -191,16 +181,16 @@ const INITIAL_MEDICINES: Medicine[] = [
     side_effects: '偶见眼部刺痛。',
     usage_frequency_score: 50
   },
-  { id: '11', name: '健胃消食片', category: '肠胃药', form_type: FormType.TABLET, location: '餐厅', total_quantity: 32, unit: '片', threshold: 10, expiry_date: '2027-10-01', last_purchase_date: '2023-11-11', symptoms_treated: '消化不良', dosage_instruction: '每日3次，每次3片', daily_usage: 9, side_effects: '无', usage_frequency_score: 10, image_url: 'https://picsum.photos/300/300?random=11' },
-  { id: '12', name: '云南白药喷雾', category: '外用药', form_type: FormType.SPRAY, location: '运动包', total_quantity: 1, unit: '瓶', threshold: 1, expiry_date: '2027-05-01', last_purchase_date: '2023-12-01', symptoms_treated: '跌打损伤', dosage_instruction: '每日3-5次，喷患处', daily_usage: 0.2, side_effects: '皮肤过敏', usage_frequency_score: 6, image_url: 'https://picsum.photos/300/300?random=12' },
-  { id: '13', name: '奥美拉唑肠溶胶囊', category: '肠胃药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 14, unit: '粒', threshold: 7, expiry_date: '2028-02-01', last_purchase_date: '2023-08-01', symptoms_treated: '胃酸过多', dosage_instruction: '每日1次，每次1粒', daily_usage: 1, side_effects: '口干', usage_frequency_score: 9, image_url: 'https://picsum.photos/300/300?random=13' },
-  { id: '14', name: '连花清瘟胶囊', category: '感冒药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 48, unit: '粒', threshold: 24, expiry_date: '2027-09-09', last_purchase_date: '2022-12-01', symptoms_treated: '流感', dosage_instruction: '每日3次，每次4粒', daily_usage: 12, side_effects: '胃部不适', usage_frequency_score: 40, image_url: 'https://picsum.photos/300/300?random=14' },
-  { id: '15', name: '红霉素软膏', category: '外用药', form_type: FormType.TOPICAL, location: '床头柜', total_quantity: 1, unit: '支', threshold: 1, expiry_date: '2027-01-01', last_purchase_date: '2023-01-01', symptoms_treated: '皮肤感染', dosage_instruction: '每日2次，涂抹患处', daily_usage: 0.1, side_effects: '偶见刺激', usage_frequency_score: 3, image_url: 'https://picsum.photos/300/300?random=15' },
-  { id: '16', name: '褪黑素', category: '保健品', form_type: FormType.TABLET, location: '床头柜', total_quantity: 60, unit: '粒', threshold: 10, expiry_date: '2028-05-05', last_purchase_date: '2023-10-10', symptoms_treated: '失眠', dosage_instruction: '睡前1粒', daily_usage: 1, side_effects: '白天嗜睡', usage_frequency_score: 100, image_url: 'https://picsum.photos/300/300?random=16' },
-  { id: '17', name: '诺氟沙星胶囊', category: '肠胃药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 20, unit: '粒', threshold: 6, expiry_date: '2019-01-01', last_purchase_date: '2018-01-01', symptoms_treated: '细菌性痢疾', dosage_instruction: '每日2次，每次2粒', daily_usage: 4, side_effects: '软骨损害', usage_frequency_score: 0, image_url: 'https://picsum.photos/300/300?random=17' },
-  { id: '18', name: '阿司匹林肠溶片', category: '心脑血管', form_type: FormType.TABLET, location: '老人房', total_quantity: 100, unit: '片', threshold: 30, expiry_date: '2028-03-03', last_purchase_date: '2023-11-01', symptoms_treated: '血栓预防', dosage_instruction: '每日1次，每次1片', daily_usage: 1, side_effects: '出血倾向', usage_frequency_score: 90, image_url: 'https://picsum.photos/300/300?random=18' },
-  { id: '19', name: '金嗓子喉片', category: '咽喉', form_type: FormType.TABLET, location: '包里', total_quantity: 5, unit: '片', threshold: 5, expiry_date: '2027-08-08', last_purchase_date: '2023-09-09', symptoms_treated: '咽喉肿痛', dosage_instruction: '含服，每小时1-2片', daily_usage: 3, side_effects: '无', usage_frequency_score: 18, image_url: 'https://picsum.photos/300/300?random=19' },
-  { id: '20', name: '风油精', category: '外用药', form_type: FormType.LIQUID, location: '客厅茶几', total_quantity: 2, unit: '瓶', threshold: 1, expiry_date: '2028-10-10', last_purchase_date: '2021-10-10', symptoms_treated: '蚊虫叮咬', dosage_instruction: '适量涂抹', daily_usage: 0.1, side_effects: '刺激眼睛', usage_frequency_score: 11, image_url: 'https://picsum.photos/300/300?random=20' },
+  { id: '11', name: '健胃消食片', category: '肠胃药', form_type: FormType.TABLET, location: '餐厅', total_quantity: 32, unit: '片', threshold: 10, expiry_date: '2027-10-01', last_purchase_date: '2023-11-11', symptoms_treated: '消化不良', dosage_instruction: '每日3次，每次3片', daily_usage: 9, side_effects: '无', usage_frequency_score: 10 },
+  { id: '12', name: '云南白药喷雾', category: '外用药', form_type: FormType.SPRAY, location: '运动包', total_quantity: 1, unit: '瓶', threshold: 1, expiry_date: '2027-05-01', last_purchase_date: '2023-12-01', symptoms_treated: '跌打损伤', dosage_instruction: '每日3-5次，喷患处', daily_usage: 0.2, side_effects: '皮肤过敏', usage_frequency_score: 6 },
+  { id: '13', name: '奥美拉唑肠溶胶囊', category: '肠胃药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 14, unit: '粒', threshold: 7, expiry_date: '2028-02-01', last_purchase_date: '2023-08-01', symptoms_treated: '胃酸过多', dosage_instruction: '每日1次，每次1粒', daily_usage: 1, side_effects: '口干', usage_frequency_score: 9 },
+  { id: '14', name: '连花清瘟胶囊', category: '感冒药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 48, unit: '粒', threshold: 24, expiry_date: '2027-09-09', last_purchase_date: '2022-12-01', symptoms_treated: '流感', dosage_instruction: '每日3次，每次4粒', daily_usage: 12, side_effects: '胃部不适', usage_frequency_score: 40 },
+  { id: '15', name: '红霉素软膏', category: '外用药', form_type: FormType.TOPICAL, location: '床头柜', total_quantity: 1, unit: '支', threshold: 1, expiry_date: '2027-01-01', last_purchase_date: '2023-01-01', symptoms_treated: '皮肤感染', dosage_instruction: '每日2次，涂抹患处', daily_usage: 0.1, side_effects: '偶见刺激', usage_frequency_score: 3 },
+  { id: '16', name: '褪黑素', category: '保健品', form_type: FormType.TABLET, location: '床头柜', total_quantity: 60, unit: '粒', threshold: 10, expiry_date: '2028-05-05', last_purchase_date: '2023-10-10', symptoms_treated: '失眠', dosage_instruction: '睡前1粒', daily_usage: 1, side_effects: '白天嗜睡', usage_frequency_score: 100 },
+  { id: '17', name: '诺氟沙星胶囊', category: '肠胃药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 20, unit: '粒', threshold: 6, expiry_date: '2019-01-01', last_purchase_date: '2018-01-01', symptoms_treated: '细菌性痢疾', dosage_instruction: '每日2次，每次2粒', daily_usage: 4, side_effects: '软骨损害', usage_frequency_score: 0 },
+  { id: '18', name: '阿司匹林肠溶片', category: '心脑血管', form_type: FormType.TABLET, location: '老人房', total_quantity: 100, unit: '片', threshold: 30, expiry_date: '2028-03-03', last_purchase_date: '2023-11-01', symptoms_treated: '血栓预防', dosage_instruction: '每日1次，每次1片', daily_usage: 1, side_effects: '出血倾向', usage_frequency_score: 90 },
+  { id: '19', name: '金嗓子喉片', category: '咽喉', form_type: FormType.TABLET, location: '包里', total_quantity: 5, unit: '片', threshold: 5, expiry_date: '2027-08-08', last_purchase_date: '2023-09-09', symptoms_treated: '咽喉肿痛', dosage_instruction: '含服，每小时1-2片', daily_usage: 3, side_effects: '无', usage_frequency_score: 18 },
+  { id: '20', name: '风油精', category: '外用药', form_type: FormType.LIQUID, location: '客厅茶几', total_quantity: 2, unit: '瓶', threshold: 1, expiry_date: '2028-10-10', last_purchase_date: '2021-10-10', symptoms_treated: '蚊虫叮咬', dosage_instruction: '适量涂抹', daily_usage: 0.1, side_effects: '刺激眼睛', usage_frequency_score: 11 },
 ];
 
 interface DBStructure {

@@ -42,7 +42,7 @@ const ShoppingList: React.FC = () => {
   };
 
   return (
-    <div className="p-4 pb-20 md:pb-4 max-w-3xl mx-auto">
+    <div className="p-4 max-w-3xl mx-auto">
       <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center">
         <span>需补货清单</span>
         <span className="ml-3 bg-red-100 text-red-600 text-sm font-bold px-3 py-1 rounded-full">{items.length}</span>
