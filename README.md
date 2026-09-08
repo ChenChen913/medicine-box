@@ -8,7 +8,7 @@
 
 ## 技术架构
 
-- **前端**：React 18 + Vite 5 + TailwindCSS CDN
+- **前端**：React 18 + Vite 5 + TailwindCSS（本地编译，见 `tailwind.config.js`）
 - **数据持久化**：当前使用浏览器 localStorage（单机模式）
 - **云端方案**：预留 Supabase 双后端（见 [TODO.md](TODO.md)）
 - **部署**：GitHub Actions → GitHub Pages（免费）

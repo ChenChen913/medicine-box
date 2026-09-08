@@ -32,17 +32,24 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess }) => {
   });
   const [previewImage, setPreviewImage] = useState<string>('');
 
+  // 图片最大 2MB：base64 直接存 localStorage / 数据库，过大易撑爆存储配额
+  const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        setPreviewImage(result);
-        setFormData(prev => ({ ...prev, image_url: result }));
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    if (file.size > MAX_IMAGE_BYTES) {
+      alert('图片太大，请选择 2MB 以内的图片');
+      e.target.value = ''; // 允许用户重新选择同一文件
+      return;
     }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      setPreviewImage(result);
+      setFormData(prev => ({ ...prev, image_url: result }));
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -63,9 +70,10 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess }) => {
       name: formData.name || '未命名',
       category: formData.category || '其他',
       location: formData.location || '未知',
-      total_quantity: Number(formData.total_quantity),
+      // parseInt 对空串会返回 NaN，用 || 0 兜底，避免 NaN 入库
+      total_quantity: Number(formData.total_quantity) || 0,
       unit: formData.unit || '粒',
-      threshold: Number(formData.threshold),
+      threshold: Number(formData.threshold) || 0,
       expiry_date: formData.expiry_date || new Date().toISOString().split('T')[0],
       last_purchase_date: formData.last_purchase_date || new Date().toISOString().split('T')[0],
       symptoms_treated: formData.symptoms_treated || '',
@@ -131,7 +139,7 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess }) => {
               <div className="flex gap-2">
                 <input required type="number" className={inputClass}
                   placeholder="如: 24"
-                  value={formData.total_quantity} onChange={e => setFormData({...formData, total_quantity: parseInt(e.target.value)})} />
+                  value={formData.total_quantity} onChange={e => setFormData({...formData, total_quantity: parseInt(e.target.value) || 0})} />
                 
                 <select 
                   className="w-24 border border-slate-200 rounded-lg p-3 focus:ring-2 focus:ring-emerald-500 outline-none bg-white text-center h-12"
@@ -145,7 +153,7 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess }) => {
             <div>
               <label className={labelClass}>低库存预警值</label>
               <input required type="number" className={inputClass}
-                value={formData.threshold} onChange={e => setFormData({...formData, threshold: parseInt(e.target.value)})} />
+                value={formData.threshold} onChange={e => setFormData({...formData, threshold: parseInt(e.target.value) || 0})} />
             </div>
           </div>
 

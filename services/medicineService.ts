@@ -21,7 +21,7 @@ const INITIAL_MEDICINES: Medicine[] = [
     total_quantity: 12,
     unit: '粒',
     threshold: 6,
-    expiry_date: '2025-12-31',
+    expiry_date: '2027-12-31',
     last_purchase_date: '2023-10-01',
     symptoms_treated: '头痛, 牙痛, 痛经, 发热',
     dosage_instruction: '每日2次，每次1粒',
@@ -39,7 +39,7 @@ const INITIAL_MEDICINES: Medicine[] = [
     total_quantity: 5,
     unit: '袋',
     threshold: 3,
-    expiry_date: '2024-05-20',
+    expiry_date: '2027-05-20',
     last_purchase_date: '2023-11-15',
     symptoms_treated: '感冒引起的头痛, 发热, 鼻塞, 流涕',
     dosage_instruction: '每日3次，每次1袋',
@@ -57,7 +57,7 @@ const INITIAL_MEDICINES: Medicine[] = [
     total_quantity: 24,
     unit: '粒',
     threshold: 10,
-    expiry_date: '2025-08-10',
+    expiry_date: '2027-08-10',
     last_purchase_date: '2023-09-01',
     symptoms_treated: '呼吸道感染, 泌尿道感染',
     dosage_instruction: '每日3次，每次2粒',
@@ -75,7 +75,7 @@ const INITIAL_MEDICINES: Medicine[] = [
     total_quantity: 8,
     unit: '袋',
     threshold: 4,
-    expiry_date: '2026-01-01',
+    expiry_date: '2028-06-01',
     last_purchase_date: '2024-01-10',
     symptoms_treated: '急慢性腹泻',
     dosage_instruction: '每日3次，每次1袋',
@@ -93,7 +93,7 @@ const INITIAL_MEDICINES: Medicine[] = [
     total_quantity: 50,
     unit: 'ml',
     threshold: 20,
-    expiry_date: '2024-11-30',
+    expiry_date: '2027-11-30',
     last_purchase_date: '2023-06-01',
     symptoms_treated: '皮肤消毒, 小伤口处理',
     dosage_instruction: '外用，适量涂抹',
@@ -129,7 +129,7 @@ const INITIAL_MEDICINES: Medicine[] = [
     total_quantity: 15,
     unit: '片',
     threshold: 5,
-    expiry_date: '2025-03-15',
+    expiry_date: '2027-03-15',
     last_purchase_date: '2023-12-20',
     symptoms_treated: '增强免疫力, 预防坏血病',
     dosage_instruction: '每日1次，每次1片',
@@ -165,7 +165,7 @@ const INITIAL_MEDICINES: Medicine[] = [
     total_quantity: 10,
     unit: '支',
     threshold: 5,
-    expiry_date: '2025-06-30',
+    expiry_date: '2027-06-30',
     last_purchase_date: '2023-07-01',
     symptoms_treated: '中暑, 脘腹胀痛',
     dosage_instruction: '每日2次，每次1支',
@@ -183,7 +183,7 @@ const INITIAL_MEDICINES: Medicine[] = [
     total_quantity: 1,
     unit: '瓶',
     threshold: 1,
-    expiry_date: '2024-12-12',
+    expiry_date: '2027-12-12',
     last_purchase_date: '2024-01-20',
     symptoms_treated: '眼干, 眼涩',
     dosage_instruction: '滴入眼睑内，一次1-2滴',
@@ -191,15 +191,15 @@ const INITIAL_MEDICINES: Medicine[] = [
     side_effects: '偶见眼部刺痛。',
     usage_frequency_score: 50
   },
-  { id: '11', name: '健胃消食片', category: '肠胃药', form_type: FormType.TABLET, location: '餐厅', total_quantity: 32, unit: '片', threshold: 10, expiry_date: '2025-10-01', last_purchase_date: '2023-11-11', symptoms_treated: '消化不良', dosage_instruction: '每日3次，每次3片', daily_usage: 9, side_effects: '无', usage_frequency_score: 10, image_url: 'https://picsum.photos/300/300?random=11' },
-  { id: '12', name: '云南白药喷雾', category: '外用药', form_type: FormType.SPRAY, location: '运动包', total_quantity: 1, unit: '瓶', threshold: 1, expiry_date: '2026-05-01', last_purchase_date: '2023-12-01', symptoms_treated: '跌打损伤', dosage_instruction: '每日3-5次，喷患处', daily_usage: 0.2, side_effects: '皮肤过敏', usage_frequency_score: 6, image_url: 'https://picsum.photos/300/300?random=12' },
-  { id: '13', name: '奥美拉唑肠溶胶囊', category: '肠胃药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 14, unit: '粒', threshold: 7, expiry_date: '2025-02-01', last_purchase_date: '2023-08-01', symptoms_treated: '胃酸过多', dosage_instruction: '每日1次，每次1粒', daily_usage: 1, side_effects: '口干', usage_frequency_score: 9, image_url: 'https://picsum.photos/300/300?random=13' },
-  { id: '14', name: '连花清瘟胶囊', category: '感冒药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 48, unit: '粒', threshold: 24, expiry_date: '2024-09-09', last_purchase_date: '2022-12-01', symptoms_treated: '流感', dosage_instruction: '每日3次，每次4粒', daily_usage: 12, side_effects: '胃部不适', usage_frequency_score: 40, image_url: 'https://picsum.photos/300/300?random=14' },
+  { id: '11', name: '健胃消食片', category: '肠胃药', form_type: FormType.TABLET, location: '餐厅', total_quantity: 32, unit: '片', threshold: 10, expiry_date: '2027-10-01', last_purchase_date: '2023-11-11', symptoms_treated: '消化不良', dosage_instruction: '每日3次，每次3片', daily_usage: 9, side_effects: '无', usage_frequency_score: 10, image_url: 'https://picsum.photos/300/300?random=11' },
+  { id: '12', name: '云南白药喷雾', category: '外用药', form_type: FormType.SPRAY, location: '运动包', total_quantity: 1, unit: '瓶', threshold: 1, expiry_date: '2027-05-01', last_purchase_date: '2023-12-01', symptoms_treated: '跌打损伤', dosage_instruction: '每日3-5次，喷患处', daily_usage: 0.2, side_effects: '皮肤过敏', usage_frequency_score: 6, image_url: 'https://picsum.photos/300/300?random=12' },
+  { id: '13', name: '奥美拉唑肠溶胶囊', category: '肠胃药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 14, unit: '粒', threshold: 7, expiry_date: '2028-02-01', last_purchase_date: '2023-08-01', symptoms_treated: '胃酸过多', dosage_instruction: '每日1次，每次1粒', daily_usage: 1, side_effects: '口干', usage_frequency_score: 9, image_url: 'https://picsum.photos/300/300?random=13' },
+  { id: '14', name: '连花清瘟胶囊', category: '感冒药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 48, unit: '粒', threshold: 24, expiry_date: '2027-09-09', last_purchase_date: '2022-12-01', symptoms_treated: '流感', dosage_instruction: '每日3次，每次4粒', daily_usage: 12, side_effects: '胃部不适', usage_frequency_score: 40, image_url: 'https://picsum.photos/300/300?random=14' },
   { id: '15', name: '红霉素软膏', category: '外用药', form_type: FormType.TOPICAL, location: '床头柜', total_quantity: 1, unit: '支', threshold: 1, expiry_date: '2027-01-01', last_purchase_date: '2023-01-01', symptoms_treated: '皮肤感染', dosage_instruction: '每日2次，涂抹患处', daily_usage: 0.1, side_effects: '偶见刺激', usage_frequency_score: 3, image_url: 'https://picsum.photos/300/300?random=15' },
-  { id: '16', name: '褪黑素', category: '保健品', form_type: FormType.TABLET, location: '床头柜', total_quantity: 60, unit: '粒', threshold: 10, expiry_date: '2025-05-05', last_purchase_date: '2023-10-10', symptoms_treated: '失眠', dosage_instruction: '睡前1粒', daily_usage: 1, side_effects: '白天嗜睡', usage_frequency_score: 100, image_url: 'https://picsum.photos/300/300?random=16' },
+  { id: '16', name: '褪黑素', category: '保健品', form_type: FormType.TABLET, location: '床头柜', total_quantity: 60, unit: '粒', threshold: 10, expiry_date: '2028-05-05', last_purchase_date: '2023-10-10', symptoms_treated: '失眠', dosage_instruction: '睡前1粒', daily_usage: 1, side_effects: '白天嗜睡', usage_frequency_score: 100, image_url: 'https://picsum.photos/300/300?random=16' },
   { id: '17', name: '诺氟沙星胶囊', category: '肠胃药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 20, unit: '粒', threshold: 6, expiry_date: '2019-01-01', last_purchase_date: '2018-01-01', symptoms_treated: '细菌性痢疾', dosage_instruction: '每日2次，每次2粒', daily_usage: 4, side_effects: '软骨损害', usage_frequency_score: 0, image_url: 'https://picsum.photos/300/300?random=17' },
-  { id: '18', name: '阿司匹林肠溶片', category: '心脑血管', form_type: FormType.TABLET, location: '老人房', total_quantity: 100, unit: '片', threshold: 30, expiry_date: '2026-03-03', last_purchase_date: '2023-11-01', symptoms_treated: '血栓预防', dosage_instruction: '每日1次，每次1片', daily_usage: 1, side_effects: '出血倾向', usage_frequency_score: 90, image_url: 'https://picsum.photos/300/300?random=18' },
-  { id: '19', name: '金嗓子喉片', category: '咽喉', form_type: FormType.TABLET, location: '包里', total_quantity: 5, unit: '片', threshold: 5, expiry_date: '2025-08-08', last_purchase_date: '2023-09-09', symptoms_treated: '咽喉肿痛', dosage_instruction: '含服，每小时1-2片', daily_usage: 3, side_effects: '无', usage_frequency_score: 18, image_url: 'https://picsum.photos/300/300?random=19' },
+  { id: '18', name: '阿司匹林肠溶片', category: '心脑血管', form_type: FormType.TABLET, location: '老人房', total_quantity: 100, unit: '片', threshold: 30, expiry_date: '2028-03-03', last_purchase_date: '2023-11-01', symptoms_treated: '血栓预防', dosage_instruction: '每日1次，每次1片', daily_usage: 1, side_effects: '出血倾向', usage_frequency_score: 90, image_url: 'https://picsum.photos/300/300?random=18' },
+  { id: '19', name: '金嗓子喉片', category: '咽喉', form_type: FormType.TABLET, location: '包里', total_quantity: 5, unit: '片', threshold: 5, expiry_date: '2027-08-08', last_purchase_date: '2023-09-09', symptoms_treated: '咽喉肿痛', dosage_instruction: '含服，每小时1-2片', daily_usage: 3, side_effects: '无', usage_frequency_score: 18, image_url: 'https://picsum.photos/300/300?random=19' },
   { id: '20', name: '风油精', category: '外用药', form_type: FormType.LIQUID, location: '客厅茶几', total_quantity: 2, unit: '瓶', threshold: 1, expiry_date: '2028-10-10', last_purchase_date: '2021-10-10', symptoms_treated: '蚊虫叮咬', dosage_instruction: '适量涂抹', daily_usage: 0.1, side_effects: '刺激眼睛', usage_frequency_score: 11, image_url: 'https://picsum.photos/300/300?random=20' },
 ];
 
@@ -210,6 +210,19 @@ interface DBStructure {
 }
 
 const EMPTY_DB = (): DBStructure => ({ medicines: [], shoppingList: [], logs: [] });
+
+/**
+ * 今天的本地日期，格式 YYYY-MM-DD。
+ * 说明：不要用 new Date('YYYY-MM-DD') 与 new Date() 直接比较——
+ * 前者按 UTC 零点解析，后者是本地时间，在东八区过期日当天 8 点前后结果会不一致。
+ * 统一转成本地日期字符串做字典序比较，完全避开时区问题。
+ */
+export function todayDateString(): string {
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
 
 // ==========================================================
 // 后端 A：localStorage（未配置 Supabase 时的降级方案）
@@ -389,9 +402,12 @@ async function sbSyncTable(table: string, rows: Row[]): Promise<void> {
 }
 
 async function sbWrite(db: DBStructure): Promise<void> {
-  await sbSyncTable('medicines', db.medicines.map(medToRow));
-  await sbSyncTable('shopping_list', db.shoppingList.map(itemToRow));
-  await sbSyncTable('usage_logs', db.logs.map(logToRow));
+  // 三张表相互独立，并行同步以减少总耗时
+  await Promise.all([
+    sbSyncTable('medicines', db.medicines.map(medToRow)),
+    sbSyncTable('shopping_list', db.shoppingList.map(itemToRow)),
+    sbSyncTable('usage_logs', db.logs.map(logToRow)),
+  ]);
 }
 
 /**

@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Medicine } from './types';
-import { MedicineService } from './services/medicineService';
+import { MedicineService, todayDateString } from './services/medicineService';
 import MedicineCard from './components/MedicineCard';
 import ShoppingList from './components/ShoppingList';
 import AddMedicineForm from './components/AddMedicineForm';
@@ -80,15 +80,15 @@ function App() {
       );
     }
 
-    // 2. 状态过滤
-    const today = new Date();
+    // 2. 状态过滤（用本地日期字符串比较，避免 UTC 解析导致的时区误差）
+    const today = todayDateString();
     switch (filterType) {
       case 'low':
-        return result.filter(m => m.total_quantity <= m.threshold && m.total_quantity > 0 && new Date(m.expiry_date) >= today);
+        return result.filter(m => m.total_quantity <= m.threshold && m.total_quantity > 0 && m.expiry_date >= today);
       case 'out':
-        return result.filter(m => m.total_quantity === 0 && new Date(m.expiry_date) >= today);
+        return result.filter(m => m.total_quantity === 0 && m.expiry_date >= today);
       case 'expired':
-        return result.filter(m => new Date(m.expiry_date) < today);
+        return result.filter(m => !!m.expiry_date && m.expiry_date < today);
       default:
         return result;
     }
@@ -118,12 +118,12 @@ function App() {
 
 
   const stats = useMemo(() => {
-    const today = new Date();
+    const today = todayDateString();
     return {
       total: medicines.length,
       low: medicines.filter(m => m.total_quantity <= m.threshold && m.total_quantity > 0).length,
       out: medicines.filter(m => m.total_quantity === 0).length,
-      expired: medicines.filter(m => new Date(m.expiry_date) < today).length
+      expired: medicines.filter(m => !!m.expiry_date && m.expiry_date < today).length
     };
   }, [medicines]);
 
@@ -138,7 +138,7 @@ function App() {
                💊
              </div>
              <div>
-               <h1 className="font-bold text-xl md:text-2xl text-slate-800 leading-none tracking-tight">智慧药箱</h1>
+               <h1 className="font-bold text-xl md:text-2xl text-slate-800 leading-none tracking-tight">家庭药箱</h1>
                <p className="text-xs md:text-sm text-slate-400 mt-1 font-medium">家庭健康管家</p>
              </div>
           </div>
@@ -263,7 +263,14 @@ function App() {
             <button className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-black/10 text-slate-600 hover:bg-black/20 z-10" onClick={() => setSelectedMed(null)}>✕</button>
             
             <div className="relative h-64 bg-slate-100">
-               <img src={selectedMed.image_url || 'https://via.placeholder.com/300'} className="w-full h-full object-cover" alt={selectedMed.name} />
+               {selectedMed.image_url ? (
+                 <img src={selectedMed.image_url} className="w-full h-full object-cover" alt={selectedMed.name} />
+               ) : (
+                 /* 无图片时用本地渐变占位，避免依赖不稳定的第三方占位图服务 */
+                 <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-emerald-100 via-teal-100 to-cyan-100 text-7xl">
+                   💊
+                 </div>
+               )}
                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6 pt-16">
                  <h2 className="text-2xl font-bold text-white leading-tight">{selectedMed.name}</h2>
                  <p className="text-white/80 text-sm mt-1">{selectedMed.form_type} · {selectedMed.category}</p>

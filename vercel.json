@@ -1,7 +1,0 @@
-{
-  "version": 2,
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/server.cjs" },
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
-}

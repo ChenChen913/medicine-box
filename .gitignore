@@ -17,6 +17,9 @@ dist-ssr
 .env.*
 !.env.example
 
+# AI 助手本地记忆（不属于项目代码）
+.workbuddy-ai/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

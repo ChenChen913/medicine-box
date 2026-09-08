@@ -1,0 +1,20 @@
+/* 主样式入口：Tailwind 三层指令 + 全局自定义样式 */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 页面底色（原 index.html 内联样式迁移至此） */
+body {
+  background-color: #f8fafc;
+}
+
+/* 简单的自定义滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}

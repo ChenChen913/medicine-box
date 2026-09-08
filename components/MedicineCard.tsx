@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { FormType, Medicine } from '../types';
+import { todayDateString } from '../services/medicineService';
 
 interface Props {
   medicine: Medicine;
@@ -14,7 +15,8 @@ interface Props {
 }
 
 const MedicineCard: React.FC<Props> = ({ medicine, onConsume, onDetail }) => {
-  const isExpired = new Date(medicine.expiry_date) < new Date();
+  // 用本地日期字符串比较，避免 new Date('YYYY-MM-DD') 按 UTC 解析造成的时区误差
+  const isExpired = !!medicine.expiry_date && medicine.expiry_date < todayDateString();
   const isLowStock = medicine.total_quantity <= medicine.threshold;
   const isOut = medicine.total_quantity === 0;
 
@@ -28,6 +30,13 @@ const MedicineCard: React.FC<Props> = ({ medicine, onConsume, onDetail }) => {
       supplyDuration = `约可用 ${days} 天`;
     }
   }
+
+  // 底部状态圆点颜色（优先级：过期 > 用尽 > 正常）
+  const getStatusDotColor = () => {
+    if (isExpired) return 'bg-red-400';
+    if (isOut) return 'bg-gray-400';
+    return 'bg-emerald-400';
+  };
 
   // 按钮文案适配
   const consumeLabel = [FormType.TOPICAL, FormType.SPRAY, FormType.OTHER, FormType.LIQUID].includes(medicine.form_type)
@@ -161,7 +170,7 @@ const MedicineCard: React.FC<Props> = ({ medicine, onConsume, onDetail }) => {
       
       {/* 底部详情条 */}
       <div className={`px-4 py-2.5 border-t border-slate-100 text-sm text-slate-500 truncate flex items-center gap-2 ${isExpired || isOut ? 'bg-transparent' : 'bg-slate-50'}`}>
-        <span className={`w-1.5 h-1.5 rounded-full ${isExpired ? 'bg-red-400' : isOut ? 'bg-gray-400' : 'bg-emerald-400'}`}></span>
+        <span className={`w-1.5 h-1.5 rounded-full ${getStatusDotColor()}`}></span>
         用法: {medicine.dosage_instruction}
       </div>
     </div>

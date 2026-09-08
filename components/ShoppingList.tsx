@@ -8,6 +8,13 @@ const ShoppingList: React.FC = () => {
   const [newQuantity, setNewQuantity] = useState<string>('');
   const [newExpiry, setNewExpiry] = useState<string>('');
 
+  // 原因标签配色（避免嵌套三元，用映射表维护）
+  const reasonTagStyle: Record<string, string> = {
+    '过期': 'bg-red-50 text-red-600 border-red-100',
+    '用尽': 'bg-orange-50 text-orange-600 border-orange-100',
+  };
+  const getReasonTagStyle = (reason: string) => reasonTagStyle[reason] ?? 'bg-blue-50 text-blue-600 border-blue-100';
+
   const loadList = async () => {
     const all = await MedicineService.getShoppingList();
     setItems(all.filter(i => i.status === 'pending'));
@@ -54,13 +61,7 @@ const ShoppingList: React.FC = () => {
               <div>
                 <h3 className="font-bold text-lg text-slate-800">{item.medicine_name}</h3>
                 <div className="flex items-center gap-3 mt-2">
-                  <span className={`text-xs font-bold px-2 py-1 rounded border ${
-                    item.reason === '过期' 
-                      ? 'bg-red-50 text-red-600 border-red-100' 
-                      : item.reason === '用尽'
-                      ? 'bg-orange-50 text-orange-600 border-orange-100'
-                      : 'bg-blue-50 text-blue-600 border-blue-100'
-                  }`}>
+                  <span className={`text-xs font-bold px-2 py-1 rounded border ${getReasonTagStyle(item.reason)}`}>
                     原因: {item.reason}
                   </span>
                   <span className="text-xs text-slate-400">加入时间: {new Date(item.created_at).toLocaleDateString()}</span>
