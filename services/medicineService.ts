@@ -9,6 +9,19 @@
 import { Medicine, ShoppingItem, UsageLog, FormType, ShoppingStatus } from '../types';
 import { isSupabaseConfigured, getSupabase } from './supabaseClient';
 
+/**
+ * 以今天为基准偏移 N 天的本地日期字符串（YYYY-MM-DD）。
+ * 供演示种子数据使用：让「临期 / 已过期」等状态在新装设备上始终可被演示，
+ * 不会随真实时间流逝而失效。需在 INITIAL_MEDICINES 之前定义（模块初始化即调用）。
+ */
+function daysFromNow(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
 // --- 首次使用时预置的示例数据 ---
 const INITIAL_MEDICINES: Medicine[] = [
   {
@@ -139,7 +152,8 @@ const INITIAL_MEDICINES: Medicine[] = [
     total_quantity: 6,
     unit: '片',
     threshold: 3,
-    expiry_date: '2022-01-01', 
+    // 动态日期：保持“过期约 20 天”的真实演示状态，不随时间漂移成多年前
+    expiry_date: daysFromNow(-20),
     last_purchase_date: '2020-01-01',
     symptoms_treated: '过敏性鼻炎, 荨麻疹',
     dosage_instruction: '每日1次，每次1片',
@@ -182,14 +196,14 @@ const INITIAL_MEDICINES: Medicine[] = [
     usage_frequency_score: 50
   },
   { id: '11', name: '健胃消食片', category: '肠胃药', form_type: FormType.TABLET, location: '餐厅', total_quantity: 32, unit: '片', threshold: 10, expiry_date: '2027-10-01', last_purchase_date: '2023-11-11', symptoms_treated: '消化不良', dosage_instruction: '每日3次，每次3片', daily_usage: 9, side_effects: '无', usage_frequency_score: 10 },
-  { id: '12', name: '云南白药喷雾', category: '外用药', form_type: FormType.SPRAY, location: '运动包', total_quantity: 1, unit: '瓶', threshold: 1, expiry_date: '2027-05-01', last_purchase_date: '2023-12-01', symptoms_treated: '跌打损伤', dosage_instruction: '每日3-5次，喷患处', daily_usage: 0.2, side_effects: '皮肤过敏', usage_frequency_score: 6 },
+  { id: '12', name: '云南白药喷雾', category: '外用药', form_type: FormType.SPRAY, location: '运动包', total_quantity: 1, unit: '瓶', threshold: 1, expiry_date: daysFromNow(25), last_purchase_date: '2023-12-01', symptoms_treated: '跌打损伤', dosage_instruction: '每日3-5次，喷患处', daily_usage: 0.2, side_effects: '皮肤过敏', usage_frequency_score: 6 },
   { id: '13', name: '奥美拉唑肠溶胶囊', category: '肠胃药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 14, unit: '粒', threshold: 7, expiry_date: '2028-02-01', last_purchase_date: '2023-08-01', symptoms_treated: '胃酸过多', dosage_instruction: '每日1次，每次1粒', daily_usage: 1, side_effects: '口干', usage_frequency_score: 9 },
   { id: '14', name: '连花清瘟胶囊', category: '感冒药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 48, unit: '粒', threshold: 24, expiry_date: '2027-09-09', last_purchase_date: '2022-12-01', symptoms_treated: '流感', dosage_instruction: '每日3次，每次4粒', daily_usage: 12, side_effects: '胃部不适', usage_frequency_score: 40 },
   { id: '15', name: '红霉素软膏', category: '外用药', form_type: FormType.TOPICAL, location: '床头柜', total_quantity: 1, unit: '支', threshold: 1, expiry_date: '2027-01-01', last_purchase_date: '2023-01-01', symptoms_treated: '皮肤感染', dosage_instruction: '每日2次，涂抹患处', daily_usage: 0.1, side_effects: '偶见刺激', usage_frequency_score: 3 },
   { id: '16', name: '褪黑素', category: '保健品', form_type: FormType.TABLET, location: '床头柜', total_quantity: 60, unit: '粒', threshold: 10, expiry_date: '2028-05-05', last_purchase_date: '2023-10-10', symptoms_treated: '失眠', dosage_instruction: '睡前1粒', daily_usage: 1, side_effects: '白天嗜睡', usage_frequency_score: 100 },
   { id: '17', name: '诺氟沙星胶囊', category: '肠胃药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 20, unit: '粒', threshold: 6, expiry_date: '2019-01-01', last_purchase_date: '2018-01-01', symptoms_treated: '细菌性痢疾', dosage_instruction: '每日2次，每次2粒', daily_usage: 4, side_effects: '软骨损害', usage_frequency_score: 0 },
   { id: '18', name: '阿司匹林肠溶片', category: '心脑血管', form_type: FormType.TABLET, location: '老人房', total_quantity: 100, unit: '片', threshold: 30, expiry_date: '2028-03-03', last_purchase_date: '2023-11-01', symptoms_treated: '血栓预防', dosage_instruction: '每日1次，每次1片', daily_usage: 1, side_effects: '出血倾向', usage_frequency_score: 90 },
-  { id: '19', name: '金嗓子喉片', category: '咽喉', form_type: FormType.TABLET, location: '包里', total_quantity: 5, unit: '片', threshold: 5, expiry_date: '2027-08-08', last_purchase_date: '2023-09-09', symptoms_treated: '咽喉肿痛', dosage_instruction: '含服，每小时1-2片', daily_usage: 3, side_effects: '无', usage_frequency_score: 18 },
+  { id: '19', name: '金嗓子喉片', category: '咽喉', form_type: FormType.TABLET, location: '包里', total_quantity: 5, unit: '片', threshold: 5, expiry_date: daysFromNow(12), last_purchase_date: '2023-09-09', symptoms_treated: '咽喉肿痛', dosage_instruction: '含服，每小时1-2片', daily_usage: 3, side_effects: '无', usage_frequency_score: 18 },
   { id: '20', name: '风油精', category: '外用药', form_type: FormType.LIQUID, location: '客厅茶几', total_quantity: 2, unit: '瓶', threshold: 1, expiry_date: '2028-10-10', last_purchase_date: '2021-10-10', symptoms_treated: '蚊虫叮咬', dosage_instruction: '适量涂抹', daily_usage: 0.1, side_effects: '刺激眼睛', usage_frequency_score: 11 },
 ];
 
@@ -494,6 +508,87 @@ function addExpiredToShoppingList(data: DBStructure): boolean {
   return hasChanges;
 }
 
+/**
+ * 旧版演示数据效期迁移（一次性，自动执行）。
+ *
+ * 背景：2024~2025 年间播种的示例数据按「当年年份」填写效期，随着时间推移
+ * 陆续过期，老用户的药箱里 20 条演示数据有 17 条标红「已过期」，几乎无法
+ * 正常演示系统功能。由于播种只在数据为空时执行，仅更新种子代码救不了
+ * 已存在的旧数据，因此这里做一次幂等迁移：
+ *
+ *  - 仅匹配「id + name 与旧版种子完全一致，且效期仍等于旧种子原始值」的条目，
+ *    即确认是未被用户修改过的演示数据才刷新；用户自建、改名或已手动改过
+ *    效期的条目一律不动。
+ *  - 刷新结果保留完整的状态谱系：多数转为未来效期（正常备用），2 条转为
+ *    「临期 30 天内」演示临期提醒，另保留 2 条过期样本（近期过期 + 深度过期）
+ *    以便继续演示过期检测与清理链路。
+ *  - 刷新后同步清理这些药品遗留的「过期」补货条目：药品已不再过期，
+ *    留在补货清单里属于误导性提醒。
+ *  - 双重防重跑：localStorage 标记 + 旧值精确匹配。即使标记丢失
+ *    （如清空浏览器数据），只要效期已被刷新过、与旧值不再相等，就不会二次覆盖。
+ */
+const DEMO_REFRESH_FLAG = 'smart-medicine-box:demo-refresh:v1';
+
+/** 旧版种子（首版提交）的效期快照 → 迁移后的演示效期 */
+const LEGACY_DEMO_EXPIRY: Record<string, { name: string; old: string; next: string }> = {
+  '1': { name: '布洛芬缓释胶囊 (芬必得)', old: '2025-12-31', next: '2027-12-31' },
+  '2': { name: '感冒灵颗粒', old: '2024-05-20', next: '2027-05-20' },
+  '3': { name: '阿莫西林胶囊', old: '2025-08-10', next: '2027-08-10' },
+  '4': { name: '蒙脱石散 (思密达)', old: '2026-01-01', next: '2028-06-01' },
+  '5': { name: '碘伏消毒液', old: '2024-11-30', next: '2027-11-30' },
+  '7': { name: '维生素C泡腾片', old: '2025-03-15', next: '2027-03-15' },
+  '8': { name: '氯雷他定片 (开瑞坦)', old: '2022-01-01', next: daysFromNow(-20) },
+  '9': { name: '藿香正气水', old: '2025-06-30', next: '2027-06-30' },
+  '10': { name: '人工泪液滴眼液', old: '2024-12-12', next: '2027-12-12' },
+  '11': { name: '健胃消食片', old: '2025-10-01', next: '2027-10-01' },
+  '12': { name: '云南白药喷雾', old: '2026-05-01', next: daysFromNow(25) },
+  '13': { name: '奥美拉唑肠溶胶囊', old: '2025-02-01', next: '2028-02-01' },
+  '14': { name: '连花清瘟胶囊', old: '2024-09-09', next: '2027-09-09' },
+  '16': { name: '褪黑素', old: '2025-05-05', next: '2028-05-05' },
+  '18': { name: '阿司匹林肠溶片', old: '2026-03-03', next: '2028-03-03' },
+  '19': { name: '金嗓子喉片', old: '2025-08-08', next: daysFromNow(12) },
+};
+
+function refreshLegacyDemoData(data: DBStructure): boolean {
+  // 已执行过迁移的设备直接跳过
+  try {
+    if (localStorage.getItem(DEMO_REFRESH_FLAG)) return false;
+  } catch {
+    // localStorage 不可用（隐私模式等）：仅靠「旧值精确匹配」保护，仍可安全执行
+  }
+
+  const today = todayDateString();
+  let refreshed = 0;
+
+  data.medicines.forEach(med => {
+    const legacy = LEGACY_DEMO_EXPIRY[String(med.id)];
+    // id + name 同时匹配，且效期仍等于旧种子原始值，才视为未修改过的演示数据
+    if (!legacy || legacy.name !== med.name || med.expiry_date !== legacy.old) return;
+    med.expiry_date = legacy.next;
+    refreshed += 1;
+  });
+
+  if (refreshed === 0) return false;
+
+  // 清理已不再过期的药品遗留的「过期」补货条目（对应药品已删除的孤儿条目不在此处理）
+  const expiryByName = new Map(data.medicines.map(m => [m.name, m.expiry_date || '']));
+  const beforeCount = data.shoppingList.length;
+  data.shoppingList = data.shoppingList.filter(item => {
+    if (item.reason !== '过期' || item.status !== ShoppingStatus.PENDING) return true;
+    const expiry = expiryByName.get(item.medicine_name);
+    // 对应药品不存在 → 保留；仍过期 → 保留；已不再过期 → 移除
+    return expiry === undefined || expiry < today;
+  });
+  const cleaned = beforeCount - data.shoppingList.length;
+
+  try {
+    localStorage.setItem(DEMO_REFRESH_FLAG, new Date().toISOString());
+  } catch { /* ignore */ }
+
+  console.info(`[演示数据] 已刷新 ${refreshed} 条示例药品效期（含 2 条临期、2 条过期演示），清理误导性补货提醒 ${cleaned} 条`);
+  return true;
+}
+
 export const MedicineService = {
   // --- 底层读写（对外保留，便于调试） ---
   fetchData: async (): Promise<DBStructure> => (await readDB()) ?? EMPTY_DB(),
@@ -514,6 +609,10 @@ export const MedicineService = {
       data.medicines = INITIAL_MEDICINES.map(m => ({ ...m }));
       dirty = true;
     }
+
+    // 旧版演示数据效期迁移（一次性，见函数注释；需在过期检测前执行，
+    // 让「不再过期」药品的补货条目先被清理，再由过期检测为仍过期的样本补齐提醒）
+    if (refreshLegacyDemoData(data)) dirty = true;
 
     // 过期检测每次加载都执行（此前只在首次播种时运行，
     // 导致药品后来过期时永远不会自动进入补货清单）。
