@@ -33,3 +33,4 @@
 - [x] GitHub Pages 自动部署
 - [x] 双后端代码架构（Supabase / localStorage）
 - [x] 项目重命名为 Medicine Box
+- [x] 2026-09 代码评审修复：播种双写丢失过期补货条目、过期检测改为每次加载执行、统计口径与过滤对齐、全链路本地时区日期、存储失败界面可见提示、主包体积优化（413KB → 189KB，supabase-js 懒加载）

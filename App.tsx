@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Medicine } from './types';
-import { MedicineService, todayDateString } from './services/medicineService';
+import { MedicineService, todayDateString, getCategoryWeight } from './services/medicineService';
 import MedicineCard from './components/MedicineCard';
 import ShoppingList from './components/ShoppingList';
 import AddMedicineForm from './components/AddMedicineForm';
@@ -32,13 +32,52 @@ function App() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   // 详情弹窗图片加载失败标记（外链图片在部分手机网络下不可达，失败时降级为 emoji 占位）
   const [detailImageFailed, setDetailImageFailed] = useState(false);
+  // 数据加载失败（区别于「空药箱」）：加载失败时显示错误横幅，避免用户误以为药箱是空的
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // 存储写入失败提示（localStorage 配额不足 / 云端写入失败），由服务层广播事件触发
+  const [storageWarning, setStorageWarning] = useState<string | null>(null);
 
   // 异步加载数据
   const refreshData = async () => {
-    let meds = await MedicineService.getMedicines();
-    meds = MedicineService.sortMedicines(meds);
-    setMedicines(meds);
+    try {
+      let meds = await MedicineService.getMedicines();
+      meds = MedicineService.sortMedicines(meds);
+      setMedicines(meds);
+      setLoadError(null);
+    } catch (e) {
+      console.error('[App] 数据加载失败：', e);
+      setLoadError('无法连接云端数据库。为防止用空数据覆盖云端，已暂停本次加载，请检查网络后重试。');
+    }
   };
+
+  // 监听服务层广播的存储错误（localStorage 配额不足 / 云端写入失败等）
+  useEffect(() => {
+    const onStorageError = (e: Event) => {
+      setStorageWarning((e as CustomEvent<string>).detail);
+    };
+    window.addEventListener('mb:storage-error', onStorageError);
+    return () => window.removeEventListener('mb:storage-error', onStorageError);
+  }, []);
+
+  // 存储提示 6 秒后自动消失
+  useEffect(() => {
+    if (!storageWarning) return;
+    const t = setTimeout(() => setStorageWarning(null), 6000);
+    return () => clearTimeout(t);
+  }, [storageWarning]);
+
+  // 桌面端 ESC 关闭弹窗（按层级：删除确认 > 服用确认 > 详情）。
+  // 编辑表单不响应 ESC，避免误触导致已输入内容丢失。
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (deleteConfirmId) { setDeleteConfirmId(null); return; }
+      if (consumeMedId) { setConsumeMedId(null); return; }
+      if (selectedMed) setSelectedMed(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [deleteConfirmId, consumeMedId, selectedMed]);
 
   useEffect(() => {
     refreshData();
@@ -52,6 +91,11 @@ function App() {
       refreshData();
     }
   };
+
+  // 服用确认弹窗的目标药品（统一 String 比较，兼容旧数据的 id 类型差异）
+  const consumeTarget = consumeMedId
+    ? medicines.find(m => String(m.id) === String(consumeMedId))
+    : null;
 
   const onRequestDelete = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
@@ -110,13 +154,7 @@ function App() {
   }, [filteredMedicines]);
   
   const sortedGroupKeys = useMemo(() => {
-     const getCategoryWeight = (c: string) => {
-       if (['感冒', '止痛', '肠胃', '抗生素', '心脑'].some(k => c.includes(k))) return 10;
-       if (['咽喉', '抗过敏'].some(k => c.includes(k))) return 5;
-       if (['外用', '眼科'].some(k => c.includes(k))) return 2;
-       if (['保健品', '医疗器械'].some(k => c.includes(k))) return 0;
-       return 5;
-    };
+    // 分类权重直接复用 service 层的共享实现，避免两处逻辑漂移
     return Object.keys(groupedMedicines).sort((a, b) => getCategoryWeight(b) - getCategoryWeight(a));
   }, [groupedMedicines]);
 
@@ -125,8 +163,10 @@ function App() {
     const today = todayDateString();
     return {
       total: medicines.length,
-      low: medicines.filter(m => m.total_quantity <= m.threshold && m.total_quantity > 0).length,
-      out: medicines.filter(m => m.total_quantity === 0).length,
+      // 口径与下方过滤逻辑保持一致：库存告急/已用尽均排除过期药品，
+      // 否则徽标数量与点击卡片后的实际列表对不上
+      low: medicines.filter(m => m.total_quantity <= m.threshold && m.total_quantity > 0 && m.expiry_date >= today).length,
+      out: medicines.filter(m => m.total_quantity === 0 && m.expiry_date >= today).length,
       expired: medicines.filter(m => !!m.expiry_date && m.expiry_date < today).length
     };
   }, [medicines]);
@@ -137,7 +177,7 @@ function App() {
       {/* --- 顶部导航栏 --- */}
       <header className="bg-white shadow-sm sticky top-0 z-20 border-b border-slate-100">
         <div className="max-w-6xl mx-auto px-4 py-4 md:py-5 flex justify-between items-center">
-          <div className="flex items-center gap-3 md:gap-4 cursor-pointer" onClick={() => { setFilterType('all'); setActiveTab('home'); }}>
+          <div className="flex items-center gap-3 md:gap-4 cursor-pointer" onClick={() => { setFilterType('all'); setSearchQuery(''); setActiveTab('home'); }}>
              <div className="w-10 h-10 md:w-12 md:h-12 bg-emerald-500 rounded-xl md:rounded-2xl flex items-center justify-center text-white font-bold text-xl md:text-2xl shadow-lg shadow-emerald-200">
                💊
              </div>
@@ -166,7 +206,21 @@ function App() {
         
         {activeTab === 'home' && (
           <div className="p-4 md:pb-10 max-w-6xl mx-auto">
-            
+
+            {/* 数据加载失败横幅（区别于空药箱状态） */}
+            {loadError && (
+              <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 flex items-start justify-between gap-4">
+                <div className="text-sm text-red-700 leading-relaxed">
+                  <span className="font-bold block mb-1">数据加载失败</span>
+                  {loadError}
+                </div>
+                <button
+                  onClick={refreshData}
+                  className="shrink-0 bg-red-500 text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-red-600 transition-colors"
+                >重试</button>
+              </div>
+            )}
+
             {/* 搜索框 (新增) */}
             <div className="mb-6 relative max-w-xl mx-auto">
                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -221,7 +275,7 @@ function App() {
                       <MedicineCard 
                         key={med.id} 
                         medicine={med} 
-                        onConsume={(id) => setConsumeMedId(id)}
+                        onConsume={(id) => { setConsumeMedId(id); setConsumeAmount(1); }}
                         onDetail={(med) => { setSelectedMed(med); setDetailImageFailed(false); }}
                       />
                     ))}
@@ -266,7 +320,7 @@ function App() {
       {selectedMed && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSelectedMed(null)}>
           <div className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-0 relative shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-            <button className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-black/10 text-slate-600 hover:bg-black/20 z-10" onClick={() => setSelectedMed(null)}>✕</button>
+            <button className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-black/10 text-slate-600 hover:bg-black/20 z-10" aria-label="关闭详情" onClick={() => setSelectedMed(null)}>✕</button>
             
             <div className="relative h-64 bg-slate-100">
                {/* 只渲染本地 base64 图片（用户上传）。旧数据可能残留外链地址，
@@ -368,24 +422,36 @@ function App() {
       )}
 
       {/* --- 吃药确认弹窗 --- */}
-      {consumeMedId && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-sm p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+      {consumeTarget && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setConsumeMedId(null)}>
+          <div className="bg-white rounded-3xl w-full max-w-sm p-8 shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
             <h3 className="text-xl font-bold text-center mb-2 text-slate-800">确认服用</h3>
-            <p className="text-center text-emerald-600 font-medium mb-8">{medicines.find(m => m.id === consumeMedId)?.name}</p>
+            <p className="text-center text-emerald-600 font-medium mb-8">{consumeTarget.name}</p>
             <div className="flex items-center justify-center gap-6 mb-10">
               <button onClick={() => setConsumeAmount(Math.max(1, consumeAmount - 1))} className="w-12 h-12 rounded-full bg-slate-100 text-2xl font-bold text-slate-600 flex items-center justify-center hover:bg-slate-200">-</button>
               <div className="flex flex-col items-center min-w-[60px]">
                  <span className="text-4xl font-bold text-slate-800">{consumeAmount}</span>
-                 <span className="text-sm text-slate-400 font-medium mt-1">{medicines.find(m => m.id === consumeMedId)?.unit}</span>
+                 <span className="text-sm text-slate-400 font-medium mt-1">{consumeTarget.unit}</span>
               </div>
-              <button onClick={() => setConsumeAmount(consumeAmount + 1)} className="w-12 h-12 rounded-full bg-slate-100 text-2xl font-bold text-slate-600 flex items-center justify-center hover:bg-slate-200">+</button>
+              {/* 上限为当前库存，避免 UI 上可选出超过持有量的服用数 */}
+              <button
+                onClick={() => setConsumeAmount(Math.min(consumeTarget.total_quantity, consumeAmount + 1))}
+                className="w-12 h-12 rounded-full bg-slate-100 text-2xl font-bold text-slate-600 flex items-center justify-center hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                disabled={consumeAmount >= consumeTarget.total_quantity}
+              >+</button>
             </div>
             <div className="flex gap-4">
               <button onClick={() => setConsumeMedId(null)} className="flex-1 py-3.5 rounded-2xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50">取消</button>
               <button onClick={handleConsume} className="flex-1 py-3.5 rounded-2xl bg-emerald-500 text-white font-bold hover:bg-emerald-600 shadow-lg shadow-emerald-200">确认记录</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* --- 存储异常 toast --- */}
+      {storageWarning && (
+        <div className="fixed bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 z-[70] bg-slate-900 text-white text-sm font-medium px-5 py-3 rounded-xl shadow-2xl max-w-[90vw] md:max-w-md animate-in fade-in slide-in-from-bottom-2 duration-200">
+          ⚠️ {storageWarning}
         </div>
       )}
 

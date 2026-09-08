@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { FormType, Medicine } from '../types';
-import { MedicineService } from '../services/medicineService';
+import { MedicineService, todayDateString } from '../services/medicineService';
 
 interface Props {
   onClose: () => void;
@@ -86,12 +86,13 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess, editingMed }) =>
       name: formData.name || '未命名',
       category: formData.category || '其他',
       location: formData.location || '未知',
-      // parseInt 对空串会返回 NaN，用 || 0 兜底，避免 NaN 入库
+      // Number() 兜底避免 NaN 入库；允许小数（与数据库 double precision 一致，如 0.5 瓶）
       total_quantity: Number(formData.total_quantity) || 0,
       unit: formData.unit || '粒',
       threshold: Number(formData.threshold) || 0,
-      expiry_date: formData.expiry_date || editingMed?.expiry_date || new Date().toISOString().split('T')[0],
-      last_purchase_date: formData.last_purchase_date || editingMed?.last_purchase_date || new Date().toISOString().split('T')[0],
+      // 日期兜底统一走本地时区的 todayDateString()，避免 toISOString 在东八区早上 8 点前产生「昨天」
+      expiry_date: formData.expiry_date || editingMed?.expiry_date || todayDateString(),
+      last_purchase_date: formData.last_purchase_date || editingMed?.last_purchase_date || todayDateString(),
       symptoms_treated: formData.symptoms_treated || '',
       dosage_instruction: finalDosage,
       daily_usage: estimatedDaily || 0,
@@ -128,7 +129,7 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess, editingMed }) =>
       <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
         <div className="p-4 border-b border-slate-100 sticky top-0 bg-white z-10 flex justify-between items-center">
           <h2 className="text-xl font-bold text-slate-800">{editingMed ? '编辑药品信息' : '添加新药品'}</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
+          <button onClick={onClose} aria-label="关闭表单" className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
@@ -170,7 +171,7 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess, editingMed }) =>
               <div className="flex gap-2">
                 <input required type="number" className={inputClass}
                   placeholder="如: 24"
-                  value={formData.total_quantity} onChange={e => setFormData({...formData, total_quantity: parseInt(e.target.value) || 0})} />
+                  value={formData.total_quantity} onChange={e => setFormData({...formData, total_quantity: parseFloat(e.target.value) || 0})} />
                 
                 <select 
                   className="w-24 border border-slate-200 rounded-lg p-3 focus:ring-2 focus:ring-emerald-500 outline-none bg-white text-center h-12"
@@ -184,7 +185,7 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess, editingMed }) =>
             <div>
               <label className={labelClass}>低库存预警值</label>
               <input required type="number" className={inputClass}
-                value={formData.threshold} onChange={e => setFormData({...formData, threshold: parseInt(e.target.value) || 0})} />
+                value={formData.threshold} onChange={e => setFormData({...formData, threshold: parseFloat(e.target.value) || 0})} />
             </div>
           </div>
 

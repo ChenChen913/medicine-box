@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { MedicineService } from '../services/medicineService';
-import { ShoppingItem } from '../types';
+import { MedicineService, localDateString } from '../services/medicineService';
+import { ShoppingItem, ShoppingStatus } from '../types';
 
 const ShoppingList: React.FC = () => {
   const [items, setItems] = useState<ShoppingItem[]>([]);
@@ -17,7 +17,8 @@ const ShoppingList: React.FC = () => {
 
   const loadList = async () => {
     const all = await MedicineService.getShoppingList();
-    setItems(all.filter(i => i.status === 'pending'));
+    // 用枚举常量而非字符串字面量，避免拼写漂移
+    setItems(all.filter(i => i.status === ShoppingStatus.PENDING));
   };
 
   useEffect(() => {
@@ -27,15 +28,18 @@ const ShoppingList: React.FC = () => {
   const openRestockDialog = (item: ShoppingItem) => {
     setRestockItem(item);
     setNewQuantity('');
+    // 默认过期日 = 本地时区的一年后（原 toISOString().split('T')[0] 是 UTC 日期，
+    // 东八区凌晨会偏差一天，与项目其他地方的时间处理纪律不一致）
     const nextYear = new Date();
     nextYear.setFullYear(nextYear.getFullYear() + 1);
-    setNewExpiry(nextYear.toISOString().split('T')[0]);
+    setNewExpiry(localDateString(nextYear));
   };
 
   const handleRestockSubmit = async () => {
-    if (!restockItem || !newQuantity || !newExpiry) return;
+    // 数量必须为正数：填 0 会把库存置零，等于没补货
+    if (!restockItem || !newQuantity || Number(newQuantity) <= 0 || !newExpiry) return;
     
-    await MedicineService.restockMedicine(restockItem.id, parseInt(newQuantity), newExpiry);
+    await MedicineService.restockMedicine(restockItem.id, parseFloat(newQuantity), newExpiry);
     
     setRestockItem(null);
     loadList();
@@ -116,7 +120,7 @@ const ShoppingList: React.FC = () => {
               </button>
               <button 
                 onClick={handleRestockSubmit} 
-                disabled={!newQuantity || !newExpiry}
+                disabled={!newQuantity || Number(newQuantity) <= 0 || !newExpiry}
                 className="flex-1 py-3 rounded-xl bg-emerald-500 text-white font-bold hover:bg-emerald-600 shadow-lg shadow-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98]">
                 确认更新
               </button>
