@@ -1,0 +1,7 @@
+{
+  "name": "家庭智慧药箱 (Smart Medicine Box)",
+  "description": "全生命周期家庭药品管理系统。支持智能排序、库存预警、过期监控与自动补货清单生成。",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
