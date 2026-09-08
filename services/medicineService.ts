@@ -7,7 +7,7 @@
  */
 
 import { Medicine, ShoppingItem, UsageLog, FormType, ShoppingStatus } from '../types';
-import { supabase, isSupabaseConfigured } from './supabaseClient';
+import { isSupabaseConfigured, getSupabase } from './supabaseClient';
 
 // --- 首次使用时预置的示例数据 ---
 const INITIAL_MEDICINES: Medicine[] = [
@@ -202,16 +202,43 @@ interface DBStructure {
 const EMPTY_DB = (): DBStructure => ({ medicines: [], shoppingList: [], logs: [] });
 
 /**
- * 今天的本地日期，格式 YYYY-MM-DD。
+ * 任意日期 → 本地时区的 YYYY-MM-DD 字符串。
  * 说明：不要用 new Date('YYYY-MM-DD') 与 new Date() 直接比较——
  * 前者按 UTC 零点解析，后者是本地时间，在东八区过期日当天 8 点前后结果会不一致。
  * 统一转成本地日期字符串做字典序比较，完全避开时区问题。
+ * 同时也不要用 new Date().toISOString().split('T')[0] 取日期——
+ * 那是 UTC 日期，东八区早上 8 点前会得到「昨天」，项目里所有取日期的地方都应使用本函数。
  */
-export function todayDateString(): string {
-  const d = new Date();
+export function localDateString(d: Date): string {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+export function todayDateString(): string {
+  return localDateString(new Date());
+}
+
+/**
+ * 分类展示权重：数值越大越靠前（常用药类目优先展示）。
+ * App.tsx 的分组排序与 sortMedicines 共用此实现，避免两处逻辑漂移。
+ */
+export function getCategoryWeight(c: string): number {
+  if (['感冒', '止痛', '肠胃', '抗生素', '心脑'].some(k => c.includes(k))) return 10;
+  if (['咽喉', '抗过敏'].some(k => c.includes(k))) return 5;
+  if (['外用', '眼科', '皮肤'].some(k => c.includes(k))) return 2;
+  if (['保健品', '医疗器械'].some(k => c.includes(k))) return 0;
+  return 5;
+}
+
+/**
+ * 存储读写失败时向 UI 广播事件（App 监听后以横幅/toast 告知用户）。
+ * 服务层保持与 UI 解耦，只发事件不直接操作视图。
+ */
+function notifyStorageError(message: string): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent<string>('mb:storage-error', { detail: message }));
+  }
 }
 
 // ==========================================================
@@ -240,6 +267,8 @@ function localWrite(db: DBStructure): void {
     localStorage.setItem(LS_KEY, JSON.stringify(db));
   } catch (e) {
     console.error('[localStorage] 写入失败：', e);
+    // 静默失败会让用户以为已保存，刷新后数据丢失。必须广播给 UI 提示。
+    notifyStorageError('本地存储写入失败（空间可能不足，常见于大图片占用），本次修改未能保存');
   }
 }
 
@@ -286,6 +315,9 @@ function medToRow(m: Medicine): Row {
     daily_usage: num(m.daily_usage),
     side_effects: m.side_effects || null,
     usage_frequency_score: num(m.usage_frequency_score),
+    // 显式携带 updated_at：schema 里的 default now() 只在 insert 生效，
+    // upsert 冲突更新时需要显式赋值才能真正刷新
+    updated_at: new Date().toISOString(),
   };
 }
 
@@ -353,7 +385,7 @@ function rowToLog(r: Row): UsageLog {
 }
 
 async function sbRead(): Promise<DBStructure> {
-  if (!supabase) throw new Error('Supabase 未初始化');
+  const supabase = await getSupabase();
   const [m, s, l] = await Promise.all([
     supabase.from('medicines').select(MEDICINE_COLUMNS.join(',')),
     supabase.from('shopping_list').select('*'),
@@ -371,7 +403,7 @@ async function sbRead(): Promise<DBStructure> {
 
 /** 整表同步：删除已移除的行 + upsert 当前所有行（数据量很小，安全且实现简单） */
 async function sbSyncTable(table: string, rows: Row[]): Promise<void> {
-  if (!supabase) throw new Error('Supabase 未初始化');
+  const supabase = await getSupabase();
 
   const existing = await supabase.from(table).select('id');
   if (existing.error) throw existing.error;
@@ -423,9 +455,43 @@ async function writeDB(db: DBStructure): Promise<void> {
       return;
     } catch (e) {
       console.error('[Supabase] 写入失败，已回落到本地缓存：', e);
+      // 广播给 UI：用户需要知道云端没有保存成功，否则下次换设备会发现数据「丢了」
+      notifyStorageError('云端写入失败，本次修改仅保存在当前设备浏览器中，请检查网络');
     }
   }
   localWrite(db);
+}
+
+/**
+ * 过期检测：把「已过期且尚无待补货条目」的药品加入补货清单。
+ * 在传入的 data 上原地修改，返回是否有变更。
+ * 注意：必须在调用方持有的同一个数据对象上操作并单次写回，
+ * 不要在函数内部重新 readDB —— 否则会与调用方的写回互相覆盖（旧版播种流程的丢失 bug）。
+ */
+function addExpiredToShoppingList(data: DBStructure): boolean {
+  // 用本地日期字符串比较，避免 new Date('YYYY-MM-DD') 按 UTC 解析造成的时区误差
+  const today = todayDateString();
+  let hasChanges = false;
+
+  data.medicines.forEach(med => {
+    if (med.expiry_date && med.expiry_date < today) {
+      const exists = data.shoppingList.find(
+        item => item.medicine_name === med.name && item.status === ShoppingStatus.PENDING
+      );
+      if (!exists) {
+        data.shoppingList.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          medicine_name: med.name,
+          reason: '过期',
+          status: ShoppingStatus.PENDING,
+          created_at: new Date().toISOString(),
+        });
+        hasChanges = true;
+      }
+    }
+  });
+
+  return hasChanges;
 }
 
 export const MedicineService = {
@@ -437,13 +503,25 @@ export const MedicineService = {
   // --- 核心业务: 读取与初始化 ---
   getMedicines: async (): Promise<Medicine[]> => {
     const data = await readDB();
-    if (!data) return []; // 读取失败：宁可显示空，也不能拿初始数据覆盖云端
+    // 读取失败直接抛错：宁可让 UI 明确报错，也不能拿空数据/初始数据覆盖云端。
+    // （此前返回 []，UI 上「加载失败」与「空药箱」无法区分）
+    if (!data) throw new Error('数据读取失败：云端数据库不可达，为保护云端数据已中止本次读写');
+
+    let dirty = false;
 
     if (!data.medicines || data.medicines.length === 0) {
-      data.medicines = INITIAL_MEDICINES;
-      await MedicineService.checkExpiry(data.medicines);
-      await writeDB(data);
+      // 首次使用：播种示例数据。注意拷贝一份，避免业务代码改动共享常量。
+      data.medicines = INITIAL_MEDICINES.map(m => ({ ...m }));
+      dirty = true;
     }
+
+    // 过期检测每次加载都执行（此前只在首次播种时运行，
+    // 导致药品后来过期时永远不会自动进入补货清单）。
+    // 同一数据对象上原地检测 + 单次写入，也修复了旧版
+    // 「checkExpiry 内部重读数据库再写回，随后被播种写回覆盖」的双写丢失问题。
+    if (addExpiredToShoppingList(data)) dirty = true;
+
+    if (dirty) await writeDB(data);
     return data.medicines;
   },
 
@@ -452,16 +530,8 @@ export const MedicineService = {
     return data?.shoppingList ?? [];
   },
 
-  // --- 排序算法 (纯函数，无需异步) ---
+  // --- 排序算法 (纯函数，无需异步；分类权重复用模块级 getCategoryWeight) ---
   sortMedicines: (medicines: Medicine[]): Medicine[] => {
-    const getCategoryWeight = (c: string) => {
-       if (['感冒', '止痛', '肠胃', '抗生素', '心脑'].some(k => c.includes(k))) return 10;
-       if (['咽喉', '抗过敏'].some(k => c.includes(k))) return 5;
-       if (['外用', '眼科', '皮肤'].some(k => c.includes(k))) return 2;
-       if (['保健品', '医疗器械'].some(k => c.includes(k))) return 0;
-       return 5;
-    };
-
     return [...medicines].sort((a, b) => {
       const weightA = getCategoryWeight(a.category);
       const weightB = getCategoryWeight(b.category);
@@ -513,32 +583,11 @@ export const MedicineService = {
     await writeDB(data);
   },
 
-  // 检查过期 (通常在 getMedicines 后调用，或手动调用)
-  checkExpiry: async (medicines: Medicine[]) => {
+  // 检查过期（保留为独立入口便于调试；常规路径已并入 getMedicines 内的 addExpiredToShoppingList）
+  checkExpiry: async () => {
     const data = await readDB();
     if (!data) return;
-
-    // 用本地日期字符串比较，避免 new Date('YYYY-MM-DD') 按 UTC 解析造成的时区误差
-    const today = todayDateString();
-    let hasChanges = false;
-
-    medicines.forEach(med => {
-      if (med.expiry_date && med.expiry_date < today) {
-         const exists = data.shoppingList.find(item => item.medicine_name === med.name && item.status === ShoppingStatus.PENDING);
-         if (!exists) {
-           data.shoppingList.push({
-              id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-              medicine_name: med.name,
-              reason: '过期',
-              status: ShoppingStatus.PENDING,
-              created_at: new Date().toISOString()
-           });
-           hasChanges = true;
-         }
-      }
-    });
-
-    if (hasChanges) {
+    if (addExpiredToShoppingList(data)) {
       await writeDB(data);
     }
   },
@@ -565,7 +614,15 @@ export const MedicineService = {
     const data = await readDB();
     if (!data) return;
     const targetId = String(id).trim();
+    const target = data.medicines.find(m => String(m.id).trim() === targetId);
     data.medicines = data.medicines.filter(m => String(m.id).trim() !== targetId);
+    // 同步清理该药品遗留的待补货条目，避免补货清单出现指向已删除药品的孤儿提醒。
+    // 用药记录（logs）属于历史凭证，保留不清。
+    if (target) {
+      data.shoppingList = data.shoppingList.filter(
+        item => !(item.medicine_name === target.name && item.status === ShoppingStatus.PENDING)
+      );
+    }
     await writeDB(data);
   },
 
@@ -581,7 +638,7 @@ export const MedicineService = {
       if (medIndex !== -1) {
         data.medicines[medIndex].total_quantity = newQuantity;
         data.medicines[medIndex].expiry_date = newExpiryDate;
-        data.medicines[medIndex].last_purchase_date = new Date().toISOString().split('T')[0];
+        data.medicines[medIndex].last_purchase_date = todayDateString();
       }
     }
     await writeDB(data);

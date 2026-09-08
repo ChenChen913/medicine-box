@@ -16,9 +16,11 @@ export enum FormType {
 }
 
 // 购物清单条目状态
+// 说明：数据库 schema 的 check 约束还允许 'bought'（已购买），
+// 但当前业务里「已买入」会直接把条目从清单移除（见 restockMedicine），
+// 不会产生 bought 状态的行，因此代码里只保留 PENDING。
 export enum ShoppingStatus {
-  PENDING = 'pending', // 待购买
-  BOUGHT = 'bought'    // 已购买
+  PENDING = 'pending' // 待购买
 }
 
 // 核心药品实体接口
