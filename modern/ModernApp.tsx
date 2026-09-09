@@ -4,8 +4,8 @@
  * 描述: 基于设计稿（电脑端.html / 手机端.html）适配真实数据层的完整实现：
  *       - 桌面（lg+）：固定顶栏 + 储药指数横幅 + 4 指标卡 + 提示条 +
  *         搜索过滤 + 分类三列卡片 + 右侧详情抽屉
- *       - 移动（<lg）：头部 + 环形健康卡 + 迷你指标 + 过滤 chips +
- *         分类列表（含轻量物资双列小卡）+ 悬浮底部导航 + 中央 FAB
+ *       - 移动（<lg）：头部（Logo + 用药记录入口）+ 健康概览 2x2 四格 +
+ *         搜索联想下拉 + 分类列表（含轻量物资双列小卡）+ 悬浮底部导航（3 位：药箱/FAB/补货）
  *       数据层与经典版完全共享（MedicineService），任何操作实时同步。
  */
 
@@ -21,7 +21,7 @@ import { ConsumeDialog, DeleteDialog, MedicineForm } from './components/Dialogs'
 import { RestockView, LogsView } from './components/Views';
 import {
   SearchFilter, CategorySections, MobileHealthCard,
-  HealthBanner, MetricGrid, useFilteredMedicines,
+  HealthBanner, MetricGrid, useFilteredMedicines, usePinyinIndex,
   type FilterKey,
 } from './components/HomeContent';
 
@@ -104,7 +104,8 @@ const ModernApp: React.FC = () => {
     expiring: overview.expiringSoon,
     expired: overview.expired,
   }), [medicines.length, overview]);
-  const filtered = useFilteredMedicines(medicines, query, filter, location);
+  const pinyinIndex = usePinyinIndex(medicines);
+  const filtered = useFilteredMedicines(medicines, query, filter, location, pinyinIndex);
 
   // ---- 操作 ----
   const handleConsumeDone = async (med: Medicine, amount: number) => {
@@ -244,16 +245,21 @@ const ModernApp: React.FC = () => {
         </div>
       </header>
 
-      {/* 移动端头部（流内） */}
+      {/* 移动端头部（流内）：左 Logo，右「用药记录」入口（入库走底部中央 FAB） */}
       <header className="md:hidden px-4 pt-4 pb-1 flex items-center justify-between gap-3">
         {Logo}
         <button
           type="button"
-          onClick={openAdd}
-          className="flex items-center gap-1 px-3.5 py-2 rounded-full bg-m3-primary text-m3-on-primary text-xs font-semibold shadow-[0_4px_12px_rgba(15,118,110,0.3)] active:scale-95 transition-all shrink-0"
+          onClick={() => switchView('logs')}
+          aria-current={view === 'logs' ? 'page' : undefined}
+          className={`flex items-center gap-1 px-3.5 py-2 rounded-full text-xs font-semibold active:scale-95 transition-all shrink-0 ${
+            view === 'logs'
+              ? 'bg-m3-primary text-m3-on-primary shadow-[0_4px_12px_rgba(15,118,110,0.3)]'
+              : 'bg-m3-surface-container-lowest text-m3-on-surface-variant shadow-[0_2px_8px_rgba(15,118,110,0.05)]'
+          }`}
         >
-          <Icon name="add" className="w-4 h-4" />
-          <span>入库</span>
+          <Icon name="history" className="w-4 h-4" />
+          <span>用药记录</span>
         </button>
       </header>
 
@@ -287,6 +293,9 @@ const ModernApp: React.FC = () => {
                 filter={filter} onFilter={setFilter}
                 counts={counts}
                 locations={locations} location={location} onLocation={setLocation}
+                medicines={medicines}
+                pinyinIndex={pinyinIndex}
+                onPick={setDrawerMed}
               />
 
               {loading ? (
@@ -321,11 +330,10 @@ const ModernApp: React.FC = () => {
         </div>
       </main>
 
-      {/* 移动端悬浮底部导航：药箱 / 记录 / FAB / 补货 */}
+      {/* 移动端悬浮底部导航：药箱 / FAB / 补货（实心背景，始终常显） */}
       <div className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-[400px] z-50">
-        <div className="relative bg-m3-surface-container-lowest/90 backdrop-blur-xl rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.10)] pl-2 pr-2 py-2 flex items-center justify-between">
+        <div className="relative bg-m3-surface-container-lowest rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.12)] pl-2 pr-2 py-2 flex items-center justify-between">
           <NavPill item={navItems[0]} mobile />
-          <NavPill item={navItems[2]} mobile />
           <div className="relative -top-5 shrink-0 px-2">
             <button
               type="button"
