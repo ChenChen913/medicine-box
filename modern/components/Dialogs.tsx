@@ -12,7 +12,10 @@
 
 import React, { useState } from 'react';
 import { FormType, Medicine } from '../../types';
-import { MedicineService, todayDateString, localDateString } from '../../services/medicineService';
+import {
+  MedicineService, todayDateString, localDateString,
+  FORM_UNIT_MAP, isRestockMatch,
+} from '../../services/medicineService';
 import { Icon, IconName } from '../icons';
 import { getCategoryMeta } from '../ui';
 import { M3Select, SelectOption } from './Select';
@@ -179,7 +182,16 @@ function buildFormTypeOptions(value: string): SelectOption[] {
   return opts;
 }
 
-interface FormProps { editing?: Medicine; onClose: () => void; onDone: (name: string) => void; }
+interface FormProps {
+  editing?: Medicine;
+  /** 药箱现有药品（新增模式用于同名检测提示） */
+  allMedicines?: Medicine[];
+  /** 当前待补货清单里的药品名（新增模式用于“入库自动核销”预提示） */
+  pendingRestockNames?: string[];
+  onClose: () => void;
+  /** message：服务层返回的入库/更新结果汇总（合并/核销等），由外层直接 toast */
+  onDone: (name: string, message?: string) => void;
+}
 
 /** 从 "每日X次，每次Y单位" 解析频次（与经典版同一正则） */
 function parseDosage(instruction: string): { freq: string; amount: string } {
@@ -187,19 +199,32 @@ function parseDosage(instruction: string): { freq: string; amount: string } {
   return m ? { freq: m[1], amount: m[3] } : { freq: '', amount: '' };
 }
 
-export const MedicineForm: React.FC<FormProps> = ({ editing, onClose, onDone }) => {
+export const MedicineForm: React.FC<FormProps> = ({ editing, allMedicines, pendingRestockNames, onClose, onDone }) => {
   const initDosage = editing ? parseDosage(editing.dosage_instruction) : { freq: '1', amount: '1' };
   const [dosageFreq, setDosageFreq] = useState(initDosage.freq);
   const [dosageAmount, setDosageAmount] = useState(initDosage.amount);
   const [form, setForm] = useState<Partial<Medicine>>(
     editing ? { ...editing } : {
-      form_type: FormType.TABLET, total_quantity: 1, unit: '粒',
+      form_type: FormType.TABLET, total_quantity: 1, unit: FORM_UNIT_MAP[FormType.TABLET],
       category: '感冒药', threshold: 5, daily_usage: 0, usage_frequency_score: 0,
     }
   );
-  const [preview, setPreview] = useState(
-    editing?.image_url && editing.image_url.startsWith('data:') ? editing.image_url : ''
-  );
+  // 图片状态：form.image_url 持有当前图（含历史 data:URL）；imageRemoved 标记用户
+  // 已明确选择「不上传图片，使用分类默认图」，提交时必须清掉旧图而不是保留
+  const [imageRemoved, setImageRemoved] = useState(false);
+
+  const categoryMeta = getCategoryMeta(form.category || '其他');
+
+  // 新增模式：输入名称与药箱已有药品同名时的实时提示（合并入库 / 独立录入口径与提交后一致）
+  const trimmedName = (form.name || '').trim();
+  const existingMatch = !editing && trimmedName
+    ? allMedicines?.find(m => (m.name || '').trim() === trimmedName)
+    : undefined;
+  const sameFormMatch = existingMatch && existingMatch.form_type === form.form_type;
+  // 新增模式：待补货清单中是否有能被本次入库自动核销的提醒（与提交时服务层同一套匹配规则）
+  const matchedRestocks = !editing && trimmedName && pendingRestockNames && pendingRestockNames.length > 0
+    ? pendingRestockNames.filter(n => isRestockMatch(n, { name: trimmedName, form_type: form.form_type as FormType }, allMedicines ?? []))
+    : [];
 
   const inputCls = 'h-11 px-4 rounded-xl bg-m3-surface-container-low text-sm text-m3-on-surface placeholder:text-m3-outline outline-none focus:ring-2 focus:ring-m3-primary/30 transition-all w-full';
   const labelCls = 'text-xs font-semibold text-m3-on-surface mb-1.5 block';
@@ -215,10 +240,16 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, onClose, onDone }) 
     const reader = new FileReader();
     reader.onloadend = () => {
       const result = reader.result as string;
-      setPreview(result);
+      setImageRemoved(false);
       setForm(prev => ({ ...prev, image_url: result }));
     };
     reader.readAsDataURL(file);
+  };
+
+  /** 移除图片 → 不再保留任何实物图，入库/展示时回退到分类默认图片标识 */
+  const clearImage = () => {
+    setImageRemoved(true);
+    setForm(prev => ({ ...prev, image_url: undefined }));
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -243,16 +274,30 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, onClose, onDone }) 
       dosage_instruction: finalDosage,
       daily_usage: estimatedDaily,
       side_effects: form.side_effects || '详见说明书',
-      image_url: form.image_url ?? editing?.image_url,
+      // 用户明确移除图片（imageRemoved）时必须真正清掉旧图而不是回退保留历史值
+      image_url: imageRemoved ? undefined : (form.image_url ?? editing?.image_url),
       form_type: form.form_type as FormType,
     };
 
     if (editing) {
-      await MedicineService.updateMedicine({ ...editing, ...common, id: editing.id, usage_frequency_score: editing.usage_frequency_score });
+      const { offsetRestocks } = await MedicineService.updateMedicine(
+        { ...editing, ...common, id: editing.id, usage_frequency_score: editing.usage_frequency_score },
+        { previous: editing }
+      );
+      // 数量比编辑前增加 = 用户手动补了货（未触发任何警告的场景）：提示库存变化与核销结果
+      const increased = common.total_quantity > editing.total_quantity;
+      const parts: string[] = [`「${common.name}」的信息已更新`];
+      if (increased) parts.push(`检测到手动补货：库存 ${editing.total_quantity} → ${common.total_quantity} ${common.unit}，最近购入已记为今天`);
+      if (offsetRestocks.length > 0) parts.push(`已核销待补货提醒：${offsetRestocks.join('、')}`);
+      onDone(common.name, parts.join('；'));
     } else {
-      await MedicineService.addMedicine({ ...common, id: Date.now().toString(), usage_frequency_score: 0 });
+      const { merged, offsetRestocks } = await MedicineService.addMedicine({ ...common, id: Date.now().toString(), usage_frequency_score: 0 });
+      const parts: string[] = merged
+        ? [`「${common.name}」已在药箱中（同名同剂型），已合并入库：库存与效期以本次填写为准`]
+        : [`新药品「${common.name}」已入库，药箱概览已更新`];
+      if (offsetRestocks.length > 0) parts.push(`已自动核销待补货提醒：${offsetRestocks.join('、')}`);
+      onDone(common.name, parts.join('；'));
     }
-    onDone(common.name);
   };
 
   return (
@@ -264,25 +309,75 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, onClose, onDone }) 
       wide
     >
       <form onSubmit={submit} className="flex flex-col gap-4">
-        {/* 图片上传 */}
-        <div className="flex justify-center">
+        {/* 图片（可选）：不上传时使用分类默认图片标识；预览区实时展示最终效果（含分类切换联动） */}
+        <div className="flex flex-col items-center gap-1.5">
           <div className="relative w-24 h-24 rounded-2xl bg-m3-surface-container-low border-2 border-dashed border-m3-outline-variant flex flex-col items-center justify-center overflow-hidden hover:border-m3-primary transition-colors group">
-            {preview ? (
-              <img src={preview} alt="预览" className="w-full h-full object-cover" />
-            ) : (
-              <>
-                <Icon name="add" className="w-6 h-6 text-m3-outline group-hover:text-m3-primary transition-colors" />
-                <span className="text-[11px] text-m3-on-surface-variant mt-1 font-medium">上传图片</span>
-              </>
-            )}
-            <input type="file" accept="image/*" onChange={handleFile} className="absolute inset-0 opacity-0 cursor-pointer" aria-label="上传药品图片" />
+            {(() => {
+              const shown = imageRemoved ? undefined : form.image_url;
+              const dataImg = shown && shown.startsWith('data:') ? shown : '';
+              if (dataImg) {
+                return (
+                  <>
+                    <img src={dataImg} alt="预览" className="w-full h-full object-cover" />
+                    <input type="file" accept="image/*" onChange={handleFile} className="absolute inset-0 opacity-0 cursor-pointer" aria-label="更换药品图片" />
+                  </>
+                );
+              }
+              return (
+                <>
+                  {/* 分类默认图预览：随「所属健康分类」下拉实时切换 */}
+                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${categoryMeta.iconBg} flex items-center justify-center ${categoryMeta.iconColor}`}>
+                    <Icon name={categoryMeta.icon} className="w-5 h-5" />
+                  </div>
+                  <span className="text-[10px] text-m3-on-surface-variant mt-1.5 font-medium">默认分类图片</span>
+                  <input type="file" accept="image/*" onChange={handleFile} className="absolute inset-0 opacity-0 cursor-pointer" aria-label="上传药品图片（可选）" />
+                </>
+              );
+            })()}
           </div>
+          {(() => {
+            const shown = imageRemoved ? undefined : form.image_url;
+            return shown ? (
+              <button type="button" onClick={clearImage} className="text-[11px] font-medium text-m3-on-surface-variant hover:text-m3-error transition-colors">
+                移除图片，使用默认分类图
+              </button>
+            ) : (
+              <span className="text-[10px] text-m3-outline">可选；不上传将使用分类默认图片</span>
+            );
+          })()}
         </div>
 
         <label className="flex flex-col gap-1.5">
           <span className={labelCls}>药品名称 / 通用名</span>
           <input required type="text" className={inputCls} value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="如：布洛芬缓释胶囊" />
         </label>
+
+        {/* 同名 / 待补货匹配实时提示：口径与服务层提交后的实际行为完全一致 */}
+        {existingMatch && sameFormMatch && (
+          <div className="rounded-xl p-3 bg-m3-primary/10 text-m3-on-surface text-[12px] leading-relaxed flex items-start gap-2" role="status">
+            <Icon name="sync" className="w-4 h-4 text-m3-primary shrink-0 mt-0.5" />
+            <span>
+              药箱中已有 <b className="font-semibold">{existingMatch.name}</b>（{existingMatch.form_type} · 剩余 {existingMatch.total_quantity}{existingMatch.unit}{existingMatch.location ? ` · ${existingMatch.location}` : ''}）。
+              确认入库后将与它合并：<b className="font-semibold">库存、效期等信息以本次填写为准</b>，其待补货提醒也会自动核销。
+            </span>
+          </div>
+        )}
+        {existingMatch && !sameFormMatch && (
+          <div className="rounded-xl p-3 bg-m3-tertiary-fixed/60 text-m3-on-surface text-[12px] leading-relaxed flex items-start gap-2" role="status">
+            <Icon name="info" className="w-4 h-4 text-m3-tertiary-container shrink-0 mt-0.5" />
+            <span>
+              药箱中已有同名药品「{existingMatch.name}」，但剂型不同（已有：{existingMatch.form_type}），将作为<b className="font-semibold">独立新条目</b>录入；若想为它补货，建议在详情中直接编辑该药品增加库存。
+            </span>
+          </div>
+        )}
+        {!existingMatch && matchedRestocks.length > 0 && (
+          <div className="rounded-xl p-3 bg-m3-primary/10 text-m3-on-surface text-[12px] leading-relaxed flex items-start gap-2" role="status">
+            <Icon name="shopping_bag" className="w-4 h-4 text-m3-primary shrink-0 mt-0.5" />
+            <span>
+              待补货清单中有匹配的提醒（{matchedRestocks.join('、')}），本次入库后会<b className="font-semibold">自动核销</b>，无需再走「已买入」登记。
+            </span>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex flex-col gap-1.5">
@@ -302,7 +397,12 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, onClose, onDone }) 
               ariaLabel="剂型"
               value={form.form_type || FormType.TABLET}
               options={buildFormTypeOptions(form.form_type || FormType.TABLET)}
-              onChange={v => setForm({ ...form, form_type: v as FormType })}
+              onChange={v => setForm(prev => ({
+                ...prev,
+                form_type: v as FormType,
+                // 剂型 → 单位联动：片剂→片、胶囊→粒、颗粒→袋…；切换后仍可手动改单位
+                unit: FORM_UNIT_MAP[v] || prev.unit,
+              }))}
             />
           </div>
         </div>

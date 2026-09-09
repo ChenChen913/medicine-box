@@ -370,12 +370,18 @@ const ModernApp: React.FC = () => {
         <MedicineForm
           key={editing ? `edit-${editing.id}` : 'add-new'}
           editing={editing ?? undefined}
+          allMedicines={medicines}
+          pendingRestockNames={shopping.map(i => i.medicine_name)}
           onClose={() => { setFormOpen(false); setEditing(null); }}
-          onDone={name => {
+          onDone={(name, message) => {
             setFormOpen(false);
             const wasEditing = !!editing;
             setEditing(null);
-            showToast(wasEditing ? `「${name}」的信息已更新` : `新药品「${name}」已入库，药箱概览已更新`);
+            // message：服务层返回的入库/更新结果汇总（合并入库 / 手动补货识别 / 待补货核销），
+            // 无则回退到默认文案
+            showToast(
+              message || (wasEditing ? `「${name}」的信息已更新` : `新药品「${name}」已入库，药箱概览已更新`)
+            );
             refreshData();
           }}
         />

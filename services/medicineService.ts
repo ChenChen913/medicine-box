@@ -256,6 +256,94 @@ function notifyStorageError(message: string): void {
 }
 
 // ==========================================================
+// 剂型 ↔ 单位联动 + 待补货匹配（入库/编辑补货链路的核心逻辑）
+// ==========================================================
+
+/**
+ * 剂型 → 默认数量单位映射（入库/编辑表单切换剂型时单位自动联动）。
+ * 这是「片剂→几片、胶囊→几粒、颗粒→几袋」等对应关系的单一数据源，
+ * 表单（modern/components/Dialogs.tsx）直接引用，避免两处漂移。
+ * 用户仍可在表单中手动改单位；映射只在切换剂型那一刻生效。
+ */
+export const FORM_UNIT_MAP: Record<string, string> = {
+  [FormType.TABLET]: '片',
+  [FormType.CAPSULE]: '粒',
+  [FormType.GRANULE]: '袋',
+  [FormType.LIQUID]: '瓶',
+  [FormType.TOPICAL]: '支',
+  [FormType.SPRAY]: '瓶',
+  [FormType.OTHER]: '盒',
+};
+
+/** 各剂型在药品名称中的常见关键词（用于从名称反推剂型，辅助匹配） */
+const FORM_KEYWORDS: Record<string, string[]> = {
+  [FormType.TABLET]: ['片'],
+  [FormType.CAPSULE]: ['胶囊', '胶丸'],
+  [FormType.GRANULE]: ['颗粒', '冲剂', '散'],
+  [FormType.LIQUID]: ['口服液', '糖浆', '合剂', '滴眼液', '滴鼻液', '滴耳液', '滴剂', '水', '液'],
+  [FormType.TOPICAL]: ['膏', '霜', '凝胶', '栓', '贴', '搽剂'],
+  [FormType.SPRAY]: ['喷雾', '气雾剂', '喷剂'],
+  [FormType.OTHER]: [],
+};
+
+/** 从药品名称推断可能剂型集合；无命中返回空集（无法判断） */
+function inferFormsFromName(name: string): Set<string> {
+  const hits = new Set<string>();
+  Object.entries(FORM_KEYWORDS).forEach(([form, words]) => {
+    if (words.some(w => name.includes(w))) hits.add(form);
+  });
+  return hits;
+}
+
+/**
+ * 判断「待补货条目」与「入库/编辑的药品」是否指向同一种药。
+ * 匹配规则（入库自动核销待补货的核心，需与表单提示口径一致）：
+ *  1. 名称 trim 后完全相等 → 直接认定同一药品（名称是补货条目的唯一标识，
+ *     此时不再苛求剂型——同一名字录成不同剂型视为数据修正，仍应核销提醒）；
+ *  2. 名称存在包含关系（如「布洛芬缓释胶囊 (芬必得)」与「布洛芬缓释胶囊」）
+ *     → 需剂型佐证，两层校验：
+ *       a. 药箱中与条目同名的药品剂型最权威，与本次录入剂型不同 → 不匹配；
+ *       b. 双方名称关键词反推剂型（条目名与药品名各自推断后取并集），
+ *          只要能推断出剂型就必须与录入剂型一致（如条目「阿司匹林」本身
+ *          推不出剂型，但药名「阿司匹林肠溶片」能推出片剂，胶囊录入即不匹配）；
+ *  3. 其余情况（名称无包含关系）→ 一律不匹配，避免误伤相似名药品。
+ */
+export function isRestockMatch(
+  itemName: string,
+  med: Pick<Medicine, 'name' | 'form_type'>,
+  medicines: Medicine[]
+): boolean {
+  const a = (itemName || '').trim();
+  const b = (med.name || '').trim();
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (!(a.includes(b) || b.includes(a))) return false;
+
+  const existing = medicines.find(m => (m.name || '').trim() === a);
+  if (existing?.form_type && existing.form_type !== med.form_type) return false;
+
+  const hits = new Set<string>([...inferFormsFromName(a), ...inferFormsFromName(b)]);
+  return hits.size === 0 || hits.has(med.form_type);
+}
+
+/**
+ * 在 DBStructure 上核销（移除）与新药品匹配的待补货条目，原地修改。
+ * 返回被核销的药品名称列表（已去重，供 UI toast 提示）。
+ * 注意：必须在调用方持有的同一个数据对象上操作并单次写回，
+ * 与 addExpiredToShoppingList 相同的约定，避免双写互相覆盖。
+ */
+function settleMatchingRestocks(data: DBStructure, med: Medicine): string[] {
+  const removed: string[] = [];
+  const kept = data.shoppingList.filter(item => {
+    const hit = item.status === ShoppingStatus.PENDING && isRestockMatch(item.medicine_name, med, data.medicines);
+    if (hit && !removed.includes(item.medicine_name)) removed.push(item.medicine_name);
+    return !hit;
+  });
+  if (removed.length > 0) data.shoppingList = kept;
+  return removed;
+}
+
+// ==========================================================
 // 后端 A：localStorage（未配置 Supabase 时的降级方案）
 // ==========================================================
 const LS_KEY = 'smart-medicine-box:db:v1';
@@ -726,22 +814,75 @@ export const MedicineService = {
     }
   },
 
-  addMedicine: async (med: Medicine) => {
+  /**
+   * 入库新药品（含自动核销待补货链路）：
+   *  1. 药箱中已存在「同名 + 同剂型」药品时视为补货入库 → 合并更新该条记录
+   *     （数量/效期/阈值/位置/图片等信息以本次填写为准，保留原 id、名称与使用频率分，
+   *     避免产生重复条目；最近购入日期记为今天）；
+   *  2. 无论新建还是合并，都会核销与之匹配的待补货条目（isRestockMatch 规则），
+   *     即「补货不一定要走待补货按钮，入库新药同样能消掉提醒」。
+   * 返回 { merged, offsetRestocks } 供 UI 组装提示文案。
+   */
+  addMedicine: async (med: Medicine): Promise<{ merged: boolean; offsetRestocks: string[] }> => {
     const data = await readDB();
-    if (!data) return;
-    data.medicines.push(med);
+    if (!data) return { merged: false, offsetRestocks: [] };
+
+    const trimName = (med.name || '').trim();
+    const idx = data.medicines.findIndex(
+      m => (m.name || '').trim() === trimName && m.form_type === med.form_type
+    );
+
+    let merged = false;
+    let finalMed: Medicine;
+    if (idx !== -1) {
+      merged = true;
+      const existing = data.medicines[idx];
+      finalMed = {
+        ...med,
+        id: existing.id,
+        // 名称保留库内原值：待补货条目按名称关联，改名会让旧提醒变成孤儿
+        name: existing.name,
+        usage_frequency_score: existing.usage_frequency_score,
+        last_purchase_date: todayDateString(),
+      };
+      data.medicines[idx] = finalMed;
+    } else {
+      finalMed = { ...med, last_purchase_date: med.last_purchase_date || todayDateString() };
+      data.medicines.push(finalMed);
+    }
+
+    const offsetRestocks = settleMatchingRestocks(data, finalMed);
     await writeDB(data);
+    return { merged, offsetRestocks };
   },
 
-  // 编辑药品：用传入对象整体替换原记录（按 id 匹配），保留原 id
-  updateMedicine: async (med: Medicine) => {
+  /**
+   * 编辑药品：整体替换原记录（按 id 匹配，保留原 id）。
+   * 传入 previous（编辑前的旧记录）时启用「手动补货识别」：
+   * 库存数量比之前增加 → 视为用户手动买入了药（未触发任何低库存警告的场景），
+   * 自动把「最近购入」刷新为今天，并核销该药匹配的待补货提醒。
+   */
+  updateMedicine: async (med: Medicine, opts?: { previous?: Medicine }): Promise<{ offsetRestocks: string[] }> => {
     const data = await readDB();
-    if (!data) return;
+    if (!data) return { offsetRestocks: [] };
     const targetId = String(med.id).trim();
     const idx = data.medicines.findIndex(m => String(m.id).trim() === targetId);
-    if (idx === -1) return;
-    data.medicines[idx] = { ...med, id: data.medicines[idx].id };
+    if (idx === -1) return { offsetRestocks: [] };
+
+    const previous = opts?.previous;
+    const stockIncreased =
+      !!previous && Number(med.total_quantity) > Number(previous.total_quantity);
+
+    const updated: Medicine = {
+      ...med,
+      id: data.medicines[idx].id,
+      ...(stockIncreased ? { last_purchase_date: todayDateString() } : {}),
+    };
+    data.medicines[idx] = updated;
+
+    const offsetRestocks = stockIncreased ? settleMatchingRestocks(data, updated) : [];
     await writeDB(data);
+    return { offsetRestocks };
   },
 
   deleteMedicine: async (id: string) => {
