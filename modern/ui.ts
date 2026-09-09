@@ -146,19 +146,20 @@ export interface CategoryMeta {
   iconColor: string;
 }
 
+/** 分类 → 图标/配色映射（Task 9 语义化重选：图标与症状/病因直接对应） */
 export function getCategoryMeta(category: string): CategoryMeta {
   const c = category || '其他';
   if (c.includes('心脑')) return { icon: 'favorite', iconBg: 'from-m3-error-container/60 to-m3-error-container/20', iconColor: 'text-m3-error' };
-  if (c.includes('感冒') || c.includes('呼吸')) return { icon: 'cloud', iconBg: 'from-m3-secondary-fixed/40 to-m3-primary-fixed/20', iconColor: 'text-m3-primary' };
-  if (c.includes('止痛')) return { icon: 'healing', iconBg: 'from-m3-primary-fixed/40 to-m3-secondary-fixed/30', iconColor: 'text-m3-primary' };
-  if (c.includes('肠胃')) return { icon: 'restaurant', iconBg: 'from-m3-tertiary-fixed to-m3-tertiary-fixed-dim/40', iconColor: 'text-m3-tertiary' };
-  if (c.includes('抗生素')) return { icon: 'local_pharmacy', iconBg: 'from-m3-surface-container-high to-m3-surface-container', iconColor: 'text-m3-primary' };
-  if (c.includes('外用')) return { icon: 'sanitizer', iconBg: 'from-m3-primary-fixed/40 to-m3-secondary-fixed/30', iconColor: 'text-m3-primary' };
-  if (c.includes('过敏')) return { icon: 'eco', iconBg: 'from-m3-secondary-fixed/40 to-m3-primary-fixed/20', iconColor: 'text-m3-secondary' };
-  if (c.includes('咽喉')) return { icon: 'graphic_eq', iconBg: 'from-m3-tertiary-fixed to-m3-surface-container', iconColor: 'text-m3-tertiary' };
+  if (c.includes('感冒') || c.includes('呼吸')) return { icon: 'coronavirus', iconBg: 'from-m3-secondary-fixed/40 to-m3-primary-fixed/20', iconColor: 'text-m3-primary' };
+  if (c.includes('止痛')) return { icon: 'painkiller', iconBg: 'from-m3-primary-fixed/40 to-m3-secondary-fixed/30', iconColor: 'text-m3-primary' };
+  if (c.includes('肠胃')) return { icon: 'stomach', iconBg: 'from-m3-tertiary-fixed to-m3-tertiary-fixed-dim/40', iconColor: 'text-m3-tertiary' };
+  if (c.includes('抗生素')) return { icon: 'bacteria', iconBg: 'from-m3-surface-container-high to-m3-surface-container', iconColor: 'text-m3-primary' };
+  if (c.includes('外用')) return { icon: 'ointment', iconBg: 'from-m3-primary-fixed/40 to-m3-secondary-fixed/30', iconColor: 'text-m3-primary' };
+  if (c.includes('过敏')) return { icon: 'spa', iconBg: 'from-m3-secondary-fixed/40 to-m3-primary-fixed/20', iconColor: 'text-m3-secondary' };
+  if (c.includes('咽喉')) return { icon: 'throat', iconBg: 'from-m3-tertiary-fixed to-m3-surface-container', iconColor: 'text-m3-tertiary' };
   if (c.includes('保健')) return { icon: 'eco', iconBg: 'from-m3-secondary-fixed/30 to-m3-primary-fixed/20', iconColor: 'text-m3-secondary' };
   if (c.includes('器械')) return { icon: 'medical_services', iconBg: 'from-m3-primary-fixed/40 to-m3-secondary-fixed/30', iconColor: 'text-m3-primary' };
-  if (c.includes('眼科')) return { icon: 'visibility', iconBg: 'from-m3-surface-container-high to-m3-surface-container', iconColor: 'text-m3-primary' };
+  if (c.includes('眼科')) return { icon: 'eye', iconBg: 'from-m3-surface-container-high to-m3-surface-container', iconColor: 'text-m3-primary' };
   return { icon: 'medication', iconBg: 'from-m3-primary-fixed/40 to-m3-secondary-fixed/30', iconColor: 'text-m3-primary' };
 }
 

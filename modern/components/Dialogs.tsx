@@ -141,14 +141,14 @@ export const RestockDialog: React.FC<RestockProps> = ({ item, onClose, onDone })
 const CATEGORIES = ['感冒药', '止痛药', '肠胃药', '抗生素', '心脑血管', '抗过敏', '咽喉用药', '外用药', '眼科用药', '保健品', '医疗器械', '其他'];
 const UNITS = ['粒', '片', '盒', '袋', '瓶', '支', 'ml', '包', '克'];
 
-/** 剂型 → 图标与配色（与首页分类卡片同一套 M3 token） */
+/** 剂型 → 图标与配色（与首页分类卡片同一套 M3 token；Task 9 语义化重选） */
 const FORM_TYPE_META: Record<string, { icon: IconName; wrap: string }> = {
-  '片剂': { icon: 'medication', wrap: 'bg-m3-primary/10 text-m3-primary' },
+  '片剂': { icon: 'blister', wrap: 'bg-m3-primary/10 text-m3-primary' },
   '胶囊': { icon: 'capsule', wrap: 'bg-m3-secondary-fixed/40 text-m3-secondary' },
-  '颗粒': { icon: 'granule', wrap: 'bg-m3-tertiary-fixed text-m3-tertiary-container' },
-  '口服液': { icon: 'water_drop', wrap: 'bg-m3-primary-fixed/40 text-m3-primary' },
-  '外用': { icon: 'sanitizer', wrap: 'bg-m3-error-container text-m3-error' },
-  '喷雾': { icon: 'cloud', wrap: 'bg-m3-surface-container-high text-m3-primary' },
+  '颗粒': { icon: 'sachet', wrap: 'bg-m3-tertiary-fixed text-m3-tertiary-container' },
+  '口服液': { icon: 'syrup', wrap: 'bg-m3-primary-fixed/40 text-m3-primary' },
+  '外用': { icon: 'healing', wrap: 'bg-m3-error-container text-m3-error' },
+  '喷雾': { icon: 'spraying', wrap: 'bg-m3-surface-container-high text-m3-primary' },
   '其他': { icon: 'more_horiz', wrap: 'bg-m3-surface-container-high text-m3-on-surface-variant' },
 };
 
