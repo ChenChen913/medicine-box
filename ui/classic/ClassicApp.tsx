@@ -51,7 +51,10 @@ function App() {
       setLoadError(null);
     } catch (e) {
       console.error('[App] 数据加载失败：', e);
-      setLoadError('无法连接云端数据库。为防止用空数据覆盖云端，已暂停本次加载，请检查网络后重试。');
+      // 透出服务层原始原因（存储损坏 / 云端不可达等），而不是笼统的网络提示
+      setLoadError(e instanceof Error && e.message
+        ? `${e.message} 请重试；若反复出现，可通过「数据备份与恢复」导出排查。`
+        : '无法连接数据源。为防止用空数据覆盖云端，已暂停本次加载，请检查网络后重试。');
     }
   };
 
@@ -90,7 +93,11 @@ function App() {
 
   const handleConsume = async () => {
     if (consumeMedId) {
-      await MedicineService.consumeMedicine(consumeMedId, consumeAmount);
+      try {
+        await MedicineService.consumeMedicine(consumeMedId, consumeAmount);
+      } catch (e) {
+        setStorageWarning(e instanceof Error ? e.message : '操作失败，请重试');
+      }
       setConsumeMedId(null);
       setConsumeAmount(1);
       refreshData();
@@ -110,14 +117,19 @@ function App() {
 
   const handleConfirmDelete = async () => {
     if (!deleteConfirmId) return;
-    
+
     // 乐观更新 UI
     setMedicines(prevMeds => prevMeds.filter(m => String(m.id) !== String(deleteConfirmId)));
     setSelectedMed(null); // 关闭详情页
-    
-    // 后台删除
-    await MedicineService.deleteMedicine(deleteConfirmId);
+
+    // 后台删除（失败时提示并刷新回真实数据）
+    try {
+      await MedicineService.deleteMedicine(deleteConfirmId);
+    } catch (e) {
+      setStorageWarning(e instanceof Error ? e.message : '删除失败，请重试');
+    }
     setDeleteConfirmId(null);
+    refreshData();
   };
 
   // --- 过滤与搜索逻辑 ---
@@ -277,11 +289,20 @@ function App() {
 
             {/* 药品列表 */}
             {sortedGroupKeys.length === 0 ? (
-               <div className="text-center py-20">
-                 <div className="text-4xl mb-4">🔍</div>
-                 <div className="text-slate-400 font-medium">没有找到相关药品</div>
-                 {searchQuery && <div className="text-slate-300 text-sm mt-2">试试其他关键词？</div>}
-               </div>
+              medicines.length === 0 ? (
+                // 投产后空箱引导：与「搜索无结果」区分开，告诉用户如何录入第一瓶药
+                <div className="text-center py-20 bg-white rounded-2xl shadow-sm border border-dashed border-slate-200">
+                  <div className="text-4xl mb-4">💊</div>
+                  <div className="text-slate-600 font-medium">药箱还是空的</div>
+                  <div className="text-slate-400 text-sm mt-2">点击右上角（手机端为底部中央 + 按钮）入库第一瓶药</div>
+                </div>
+              ) : (
+                <div className="text-center py-20">
+                  <div className="text-4xl mb-4">🔍</div>
+                  <div className="text-slate-400 font-medium">没有找到相关药品</div>
+                  {searchQuery && <div className="text-slate-300 text-sm mt-2">试试其他关键词？</div>}
+                </div>
+              )
             ) : (
               sortedGroupKeys.map(category => (
                 <div key={category} className="mb-8">

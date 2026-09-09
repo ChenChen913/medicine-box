@@ -28,6 +28,39 @@ import {
 
 type ViewKey = 'box' | 'restock' | 'logs';
 
+/** 底部/顶部导航胶囊（模块级组件：避免在主组件内定义导致每次渲染都重建子树） */
+const NavPill: React.FC<{
+  item: { key: ViewKey; label: string; icon: 'grid_view' | 'shopping_bag' | 'history'; badge?: number };
+  mobile?: boolean;
+  active: boolean;
+  onSelect: (v: ViewKey) => void;
+}> = ({ item, mobile, active, onSelect }) => {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(item.key)}
+      aria-current={active ? 'page' : undefined}
+      className={`${mobile
+        ? 'flex flex-col items-center justify-center flex-1 h-full gap-0.5'
+        : 'px-4 lg:px-5 py-2 rounded-full text-sm flex items-center gap-1.5'} transition-all ${
+        active
+          ? mobile ? 'text-m3-primary' : 'bg-m3-surface-container-lowest text-m3-primary shadow-[0_2px_8px_rgba(15,118,110,0.06)] font-semibold'
+          : mobile ? 'text-m3-on-surface-variant' : 'text-m3-on-surface-variant hover:text-m3-on-surface'
+      }`}
+    >
+      <span className="relative">
+        <Icon name={item.icon} className={mobile ? 'w-[22px] h-[22px]' : 'w-4 h-4'} />
+        {item.badge ? (
+          <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-m3-tertiary text-m3-on-tertiary text-[9px] font-bold flex items-center justify-center">
+            {item.badge}
+          </span>
+        ) : null}
+      </span>
+      <span className={mobile ? 'text-[11px] font-medium' : ''}>{item.label}</span>
+    </button>
+  );
+};
+
 const ModernApp: React.FC = () => {
   const { toasts, showToast } = useToasts();
 
@@ -55,8 +88,8 @@ const ModernApp: React.FC = () => {
   // ---- 数据加载 ----
   const refreshData = useCallback(async () => {
     try {
-      // getMedicines 必须先行：首次播种 / 演示迁移（含品牌用药记录）在它内部写回，
-      // 若与清单/记录并行读取，新装设备首屏会读到播种前的空数据（竞态）
+      // getMedicines 必须先行：投产重置等一次性迁移在它内部写回，
+      // 若与清单/记录并行读取，老设备首屏可能读到迁移前的旧数据（竞态）
       const meds = await MedicineService.getMedicines();
       const [shop, lg] = await Promise.all([
         MedicineService.getShoppingList(),
@@ -68,7 +101,10 @@ const ModernApp: React.FC = () => {
       setLoadError(null);
     } catch (e) {
       console.error('[Modern] 数据加载失败：', e);
-      setLoadError('无法连接数据源，已暂停本次加载以保护云端数据，请检查网络后重试。');
+      // 透出服务层原始原因（存储损坏 / 云端不可达等），而不是笼统的网络提示
+      setLoadError(e instanceof Error && e.message
+        ? `${e.message} 请重试；若反复出现，可通过「数据备份与恢复」导出排查。`
+        : '无法连接数据源，已暂停本次加载以保护现有数据，请检查网络后重试。');
     } finally {
       setLoading(false);
     }
@@ -111,59 +147,71 @@ const ModernApp: React.FC = () => {
   const pinyinIndex = usePinyinIndex(medicines);
   const filtered = useFilteredMedicines(medicines, query, filter, location, pinyinIndex);
 
-  // ---- 操作 ----
-  const handleConsumeDone = async (med: Medicine, amount: number) => {
-    setConsumeTarget(null);
-    await MedicineService.consumeMedicine(med.id, amount);
-    showToast(`已记录 ${med.name} 用药 ${amount}${med.unit}，健康日志已同步`);
-    refreshData();
-  };
-
-  const handleQuickConsume = async (med: Medicine) => {
-    if (med.total_quantity <= 0) return;
-    await MedicineService.consumeMedicine(med.id, 1);
-    showToast(`已取用 ${med.name} 1${med.unit}，库存已更新`);
-    refreshData();
-  };
-
-  const handleAddRestock = async (med: Medicine) => {
-    const status = getStatus(med, todayDateString());
-    const reason = status.key === 'expired' ? '过期' : med.total_quantity === 0 ? '用尽' : '手动添加';
-    const added = await MedicineService.addToShoppingList([{ name: med.name, reason }]);
-    showToast(
-      added > 0 ? `已将「${med.name}」加入补货清单` : `「${med.name}」已在补货清单中，无需重复添加`,
-      added > 0 ? 'success' : 'warning'
-    );
-    refreshData();
-  };
-
-  const handleGeneratePurchase = async () => {
-    const today = todayDateString();
-    const entries = medicines
-      .filter(m => {
-        const s = getStatus(m, today);
-        return s.key === 'low' || s.key === 'out';
-      })
-      .map(m => ({ name: m.name, reason: (m.total_quantity === 0 ? '用尽' : '手动添加') as ShoppingItem['reason'] }));
-    if (entries.length === 0) {
-      showToast('当前没有需要补货的药品，清单保持不变', 'warning');
-      return;
+  // ---- 操作（统一错误兜底：服务层抛错时以 warning toast 告知，绝不能静默假成功） ----
+  const runSafely = async (fn: () => Promise<void>) => {
+    try {
+      await fn();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '操作失败，请重试', 'warning');
     }
-    const added = await MedicineService.addToShoppingList(entries);
-    showToast(`已根据库存状况生成采购建议（新增 ${added} 项）`);
-    refreshData();
-    setView('restock');
   };
 
-  const handleDeleteDone = async () => {
-    if (!deleteTarget) return;
-    const name = deleteTarget.name;
-    setDeleteTarget(null);
-    setDrawerMed(null);
-    await MedicineService.deleteMedicine(deleteTarget.id);
-    showToast(`已将「${name}」移出药箱`);
-    refreshData();
-  };
+  const handleConsumeDone = (target: Medicine, amount: number) =>
+    runSafely(async () => {
+      await MedicineService.consumeMedicine(target.id, amount);
+      showToast(`已记录 ${target.name} 用药 ${amount}${target.unit}，健康日志已同步`);
+      refreshData();
+    });
+
+  const handleQuickConsume = (med: Medicine) =>
+    runSafely(async () => {
+      if (med.total_quantity <= 0) return;
+      await MedicineService.consumeMedicine(med.id, 1);
+      showToast(`已取用 ${med.name} 1${med.unit}，库存已更新`);
+      refreshData();
+    });
+
+  const handleAddRestock = (med: Medicine) =>
+    runSafely(async () => {
+      const status = getStatus(med, todayDateString());
+      const reason = status.key === 'expired' ? '过期' : med.total_quantity === 0 ? '用尽' : '手动添加';
+      const added = await MedicineService.addToShoppingList([{ name: med.name, reason }]);
+      showToast(
+        added > 0 ? `已将「${med.name}」加入补货清单` : `「${med.name}」已在补货清单中，无需重复添加`,
+        added > 0 ? 'success' : 'warning'
+      );
+      refreshData();
+    });
+
+  const handleGeneratePurchase = () =>
+    runSafely(async () => {
+      const today = todayDateString();
+      const entries = medicines
+        .filter(m => {
+          const s = getStatus(m, today);
+          return s.key === 'low' || s.key === 'out';
+        })
+        .map(m => ({ name: m.name, reason: (m.total_quantity === 0 ? '用尽' : '手动添加') as ShoppingItem['reason'] }));
+      if (entries.length === 0) {
+        showToast('当前没有需要补货的药品，清单保持不变', 'warning');
+        return;
+      }
+      const added = await MedicineService.addToShoppingList(entries);
+      showToast(`已根据库存状况生成采购建议（新增 ${added} 项）`);
+      refreshData();
+      setView('restock');
+    });
+
+  const handleDeleteDone = () =>
+    runSafely(async () => {
+      if (!deleteTarget) return;
+      const name = deleteTarget.name;
+      setDeleteTarget(null);
+      setDrawerMed(null);
+      await MedicineService.deleteMedicine(deleteTarget.id);
+      showToast(`已将「${name}」移出药箱`);
+      refreshData();
+    });
 
   const openAdd = () => { setEditing(null); setFormOpen(true); };
   const openEdit = (med: Medicine) => { setDrawerMed(null); setEditing(med); setFormOpen(true); };
@@ -197,34 +245,6 @@ const ModernApp: React.FC = () => {
     { key: 'logs', label: '用药记录', icon: 'history' },
   ];
 
-  const NavPill = ({ item, mobile }: { item: typeof navItems[number]; mobile?: boolean }) => {
-    const active = view === item.key;
-    return (
-      <button
-        type="button"
-        onClick={() => switchView(item.key)}
-        aria-current={active ? 'page' : undefined}
-        className={`${mobile
-          ? 'flex flex-col items-center justify-center flex-1 h-full gap-0.5'
-          : 'px-4 lg:px-5 py-2 rounded-full text-sm flex items-center gap-1.5'} transition-all ${
-          active
-            ? mobile ? 'text-m3-primary' : 'bg-m3-surface-container-lowest text-m3-primary shadow-[0_2px_8px_rgba(15,118,110,0.06)] font-semibold'
-            : mobile ? 'text-m3-on-surface-variant' : 'text-m3-on-surface-variant hover:text-m3-on-surface'
-        }`}
-      >
-        <span className="relative">
-          <Icon name={item.icon} className={mobile ? 'w-[22px] h-[22px]' : 'w-4 h-4'} />
-          {item.badge ? (
-            <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-m3-tertiary text-m3-on-tertiary text-[9px] font-bold flex items-center justify-center">
-              {item.badge}
-            </span>
-          ) : null}
-        </span>
-        <span className={mobile ? 'text-[11px] font-medium' : ''}>{item.label}</span>
-      </button>
-    );
-  };
-
   return (
     <div className="min-h-dvh bg-m3-surface font-m3-body text-m3-on-surface antialiased">
       <ToastStack toasts={toasts} />
@@ -236,7 +256,7 @@ const ModernApp: React.FC = () => {
             {Logo}
           </button>
           <nav className="hidden md:flex items-center p-1 rounded-full bg-m3-surface-container-low">
-            {navItems.map(item => <NavPill key={item.key} item={item} />)}
+            {navItems.map(item => <NavPill key={item.key} item={item} active={view === item.key} onSelect={switchView} />)}
           </nav>
           <div className="flex items-center gap-2">
             <button
@@ -328,6 +348,7 @@ const ModernApp: React.FC = () => {
               ) : (
                 <CategorySections
                   meds={filtered}
+                  boxEmpty={medicines.length === 0}
                   onRequestConsume={setConsumeTarget}
                   onOpenDetail={setDrawerMed}
                   onAddToRestock={handleAddRestock}
@@ -358,7 +379,7 @@ const ModernApp: React.FC = () => {
       {/* 移动端悬浮底部导航：药箱 / FAB / 补货（实心背景，始终常显） */}
       <div className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-[400px] z-50">
         <div className="relative bg-m3-surface-container-lowest rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.12)] pl-2 pr-2 py-2 flex items-center justify-between">
-          <NavPill item={navItems[0]} mobile />
+          <NavPill item={navItems[0]} mobile active={view === navItems[0].key} onSelect={switchView} />
           <div className="relative -top-5 shrink-0 px-2">
             <button
               type="button"
@@ -369,7 +390,7 @@ const ModernApp: React.FC = () => {
               <Icon name="add" className="w-7 h-7" />
             </button>
           </div>
-          <NavPill item={navItems[1]} mobile />
+          <NavPill item={navItems[1]} mobile active={view === navItems[1].key} onSelect={switchView} />
         </div>
       </div>
 
@@ -386,7 +407,11 @@ const ModernApp: React.FC = () => {
         />
       )}
       {consumeTarget && (
-        <ConsumeDialog med={consumeTarget} onClose={() => setConsumeTarget(null)} onDone={a => handleConsumeDone(consumeTarget, a)} />
+        <ConsumeDialog
+          med={consumeTarget}
+          onClose={() => setConsumeTarget(null)}
+          onDone={a => { setConsumeTarget(null); handleConsumeDone(consumeTarget, a); }}
+        />
       )}
       {deleteTarget && (
         <DeleteDialog med={deleteTarget} onClose={() => setDeleteTarget(null)} onDone={handleDeleteDone} />

@@ -26,7 +26,8 @@ export const RestockView: React.FC<{ onChanged: () => void; onGeneratePurchase: 
 
   const reloadItems = () =>
     MedicineService.getShoppingList()
-      .then(all => setItems(all.filter(i => i.status === ShoppingStatus.PENDING)));
+      .then(all => setItems(all.filter(i => i.status === ShoppingStatus.PENDING)))
+      .catch(e => console.error('[RestockView] 清单刷新失败：', e));
 
   useEffect(() => {
     reloadItems().finally(() => setLoading(false));
@@ -104,8 +105,7 @@ export const RestockView: React.FC<{ onChanged: () => void; onGeneratePurchase: 
           onDone={() => {
             setRestockItem(null);
             onChanged();
-            MedicineService.getShoppingList()
-              .then(all => setItems(all.filter(i => i.status === ShoppingStatus.PENDING)));
+            reloadItems();
           }}
         />
       )}
@@ -143,6 +143,10 @@ export const LogsView: React.FC<{ logs: UsageLog[]; loading: boolean }> = ({ log
         <h1 className="text-xl md:text-2xl font-bold text-m3-on-surface tracking-tight">用药记录</h1>
         <span className="text-xs text-m3-on-surface-variant">近 30 天共 {total30} 次打卡</span>
       </div>
+
+      {logs.length > 100 && (
+        <p className="mb-4 text-[11px] text-m3-outline text-center">记录较多，当前展示最近 100 条；完整记录可通过「数据备份与恢复」导出查看</p>
+      )}
 
       {loading ? (
         <p className="text-sm text-m3-on-surface-variant py-16 text-center">正在加载记录…</p>

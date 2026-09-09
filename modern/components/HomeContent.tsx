@@ -180,6 +180,7 @@ export const SearchFilter: React.FC<{
     const isAlpha = /^[a-z]+$/i.test(q);
     return medicines.filter(m => {
       if (m.name.toLowerCase().includes(ql)) return true;
+      if (m.brand && m.brand.toLowerCase().includes(ql)) return true; // 品牌也可搜索
       if (m.symptoms_treated.toLowerCase().includes(ql)) return true;
       if ((m.location || '').toLowerCase().includes(ql)) return true;
       if (isAlpha && matchPinyin(m, ql, pinyinIndex)) return true;
@@ -304,6 +305,7 @@ export function useFilteredMedicines(
       const isAlpha = /^[a-z]+$/i.test(q);
       result = result.filter(m =>
         m.name.toLowerCase().includes(ql) ||
+        (m.brand && m.brand.toLowerCase().includes(ql)) || // 品牌也可搜索
         m.symptoms_treated.toLowerCase().includes(ql) ||
         (m.location || '').toLowerCase().includes(ql) ||
         (isAlpha && matchPinyin(m, ql, pinyinIndex))
@@ -315,7 +317,7 @@ export function useFilteredMedicines(
   }, [medicines, query, filter, location, pinyinIndex]);
 }
 
-export const CategorySections: React.FC<{ meds: Medicine[] } & CardActions> = ({ meds, ...actions }) => {
+export const CategorySections: React.FC<{ meds: Medicine[]; /** 药箱整体为空（区别于筛选后无结果，展示入库引导） */ boxEmpty?: boolean } & CardActions> = ({ meds, boxEmpty, ...actions }) => {
   const grouped = useMemo(() => {
     const groups: Record<string, Medicine[]> = {};
     meds.forEach(m => {
@@ -326,6 +328,20 @@ export const CategorySections: React.FC<{ meds: Medicine[] } & CardActions> = ({
   }, [meds]);
 
   if (grouped.length === 0) {
+    if (boxEmpty) {
+      // 投产后空箱引导：与「筛选无结果」区分开，告诉用户如何录入第一瓶药
+      return (
+        <div className="text-center py-16 rounded-3xl bg-m3-surface-container-lowest border border-dashed border-m3-outline-variant">
+          <div className="w-14 h-14 rounded-2xl bg-m3-primary/10 text-m3-primary flex items-center justify-center mx-auto mb-4">
+            <Icon name="inventory_2" className="w-7 h-7" />
+          </div>
+          <p className="text-sm font-medium text-m3-on-surface">药箱还是空的</p>
+          <p className="text-xs text-m3-on-surface-variant mt-1.5 leading-relaxed">
+            点击右上角「入库新药」（手机端为底部中央 <b className="text-m3-primary">+</b> 按钮），录入第一瓶药
+          </p>
+        </div>
+      );
+    }
     return (
       <div className="text-center py-16">
         <div className="w-14 h-14 rounded-2xl bg-m3-surface-container-low text-m3-outline flex items-center justify-center mx-auto mb-4">

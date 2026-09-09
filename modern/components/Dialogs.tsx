@@ -114,7 +114,24 @@ export const RestockDialog: React.FC<RestockProps> = ({ item, onClose, onDone })
   nextYear.setFullYear(nextYear.getFullYear() + 1);
   const [qty, setQty] = useState('');
   const [expiry, setExpiry] = useState(localDateString(nextYear));
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
   const valid = Number(qty) > 0 && !!expiry;
+
+  const submit = async () => {
+    if (!valid) return;
+    setBusy(true);
+    setError('');
+    try {
+      await MedicineService.restockMedicine(item.id, parseFloat(qty), expiry);
+      onDone();
+    } catch (e) {
+      // 服务层校验/存储失败时展示原因，弹窗保留、已填内容不丢
+      setError(e instanceof Error ? e.message : '登记失败，请重试');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <ModalShell title="购入登记" subtitle={`药品：${item.medicine_name}`} icon="shopping_bag" onClose={onClose}>
@@ -129,11 +146,14 @@ export const RestockDialog: React.FC<RestockProps> = ({ item, onClose, onDone })
           <input type="date" value={expiry} onChange={e => setExpiry(e.target.value)}
             className="h-11 px-4 rounded-xl bg-m3-surface-container-low text-m3-on-surface outline-none focus:ring-2 focus:ring-m3-primary/30 transition-all" />
         </label>
+        {error && (
+          <p className="rounded-xl p-3 bg-m3-error-container text-m3-error text-xs leading-relaxed" role="alert">{error}</p>
+        )}
       </div>
       <div className="flex gap-3">
         <button type="button" onClick={onClose} className="flex-1 py-3 rounded-full border border-m3-outline-variant text-m3-on-surface font-semibold hover:bg-m3-surface-container-low transition-colors">取消</button>
-        <button type="button" disabled={!valid} onClick={async () => { await MedicineService.restockMedicine(item.id, parseFloat(qty), expiry); onDone(); }}
-          className="flex-1 py-3 rounded-full bg-m3-primary text-m3-on-primary font-semibold shadow-md hover:bg-m3-primary-container active:scale-[0.98] transition-all disabled:opacity-40 disabled:pointer-events-none">确认更新</button>
+        <button type="button" disabled={!valid || busy} onClick={submit}
+          className="flex-1 py-3 rounded-full bg-m3-primary text-m3-on-primary font-semibold shadow-md hover:bg-m3-primary-container active:scale-[0.98] transition-all disabled:opacity-40 disabled:pointer-events-none">{busy ? '保存中…' : '确认更新'}</button>
       </div>
     </ModalShell>
   );
@@ -212,6 +232,8 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, allMedicines, pendi
   // 图片状态：form.image_url 持有当前图（含历史 data:URL）；imageRemoved 标记用户
   // 已明确选择「不上传图片，使用分类默认图」，提交时必须清掉旧图而不是保留
   const [imageRemoved, setImageRemoved] = useState(false);
+  // 提交失败提示（服务层抛错时展示，表单保留、已填内容不丢）
+  const [submitError, setSubmitError] = useState('');
 
   const categoryMeta = getCategoryMeta(form.category || '其他');
 
@@ -236,6 +258,12 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, allMedicines, pendi
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // 类型校验：accept="image/*" 只是软限制（拖拽/部分文件管理器可绕过），非图片直接拒绝
+    if (!file.type.startsWith('image/')) {
+      alert('请选择图片文件（JPG/PNG/WebP 等）');
+      e.target.value = '';
+      return;
+    }
     if (file.size > 2 * 1024 * 1024) {
       alert('图片太大，请选择 2MB 以内的图片');
       e.target.value = '';
@@ -258,6 +286,7 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, allMedicines, pendi
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError('');
     let finalDosage = form.dosage_instruction || '';
     let estimatedDaily = Number(form.daily_usage) || 0;
     if (dosageFreq && dosageAmount) {
@@ -285,24 +314,29 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, allMedicines, pendi
       form_type: form.form_type as FormType,
     };
 
-    if (editing) {
-      const { offsetRestocks } = await MedicineService.updateMedicine(
-        { ...editing, ...common, id: editing.id, usage_frequency_score: editing.usage_frequency_score },
-        { previous: editing }
-      );
-      // 数量比编辑前增加 = 用户手动补了货（未触发任何警告的场景）：提示库存变化与核销结果
-      const increased = common.total_quantity > editing.total_quantity;
-      const parts: string[] = [`「${common.name}」的信息已更新`];
-      if (increased) parts.push(`检测到手动补货：库存 ${editing.total_quantity} → ${common.total_quantity} ${common.unit}，最近购入已记为今天`);
-      if (offsetRestocks.length > 0) parts.push(`已核销待补货提醒：${offsetRestocks.join('、')}`);
-      onDone(common.name, parts.join('；'));
-    } else {
-      const { merged, offsetRestocks } = await MedicineService.addMedicine({ ...common, id: Date.now().toString(), usage_frequency_score: 0 });
-      const parts: string[] = merged
-        ? [`「${common.name}」${common.brand ? `（${common.brand}）` : ''}已在药箱中（同名同剂型同品牌），已合并入库：库存与效期以本次填写为准`]
-        : [`新药品「${common.name}」${common.brand ? `（${common.brand}）` : ''}已入库，药箱概览已更新`];
-      if (offsetRestocks.length > 0) parts.push(`已自动核销待补货提醒：${offsetRestocks.join('、')}`);
-      onDone(common.name, parts.join('；'));
+    try {
+      if (editing) {
+        const { offsetRestocks } = await MedicineService.updateMedicine(
+          { ...editing, ...common, id: editing.id, usage_frequency_score: editing.usage_frequency_score },
+          { previous: editing }
+        );
+        // 数量比编辑前增加 = 用户手动补了货（未触发任何警告的场景）：提示库存变化与核销结果
+        const increased = common.total_quantity > editing.total_quantity;
+        const parts: string[] = [`「${common.name}」的信息已更新`];
+        if (increased) parts.push(`检测到手动补货：库存 ${editing.total_quantity} → ${common.total_quantity} ${common.unit}，最近购入已记为今天`);
+        if (offsetRestocks.length > 0) parts.push(`已核销待补货提醒：${offsetRestocks.join('、')}`);
+        onDone(common.name, parts.join('；'));
+      } else {
+        const { merged, offsetRestocks } = await MedicineService.addMedicine({ ...common, id: Date.now().toString(), usage_frequency_score: 0 });
+        const parts: string[] = merged
+          ? [`「${common.name}」${common.brand ? `（${common.brand}）` : ''}已在药箱中（同名同剂型同品牌），已合并入库：库存与效期以本次填写为准`]
+          : [`新药品「${common.name}」${common.brand ? `（${common.brand}）` : ''}已入库，药箱概览已更新`];
+        if (offsetRestocks.length > 0) parts.push(`已自动核销待补货提醒：${offsetRestocks.join('、')}`);
+        onDone(common.name, parts.join('；'));
+      }
+    } catch (err) {
+      // 服务层校验/存储失败：展示原因，表单保留、已填内容不丢
+      setSubmitError(err instanceof Error ? err.message : '保存失败，请重试');
     }
   };
 
@@ -478,11 +512,16 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, allMedicines, pendi
           <input type="text" className={inputCls} value={form.location || ''} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="如：客厅医药箱第一层" />
         </label>
 
-        <div className="pt-2 flex items-center justify-end gap-3">
-          <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-full text-m3-on-surface-variant hover:bg-m3-surface-container-low text-sm font-medium transition-colors">取消</button>
-          <button type="submit" className="px-6 py-2.5 rounded-full bg-m3-primary hover:bg-m3-primary-container text-m3-on-primary text-sm font-semibold shadow-[0_4px_14px_rgba(15,118,110,0.3)] transition-all active:scale-[0.98]">
-            {editing ? '保存修改' : '确认入库'}
-          </button>
+        <div className="pt-2 flex flex-col gap-2">
+          {submitError && (
+            <p className="rounded-xl p-3 bg-m3-error-container text-m3-error text-xs leading-relaxed" role="alert">{submitError}</p>
+          )}
+          <div className="flex items-center justify-end gap-3">
+            <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-full text-m3-on-surface-variant hover:bg-m3-surface-container-low text-sm font-medium transition-colors">取消</button>
+            <button type="submit" className="px-6 py-2.5 rounded-full bg-m3-primary hover:bg-m3-primary-container text-m3-on-primary text-sm font-semibold shadow-[0_4px_14px_rgba(15,118,110,0.3)] transition-all active:scale-[0.98]">
+              {editing ? '保存修改' : '确认入库'}
+            </button>
+          </div>
         </div>
       </form>
     </ModalShell>

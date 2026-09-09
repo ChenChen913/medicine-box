@@ -153,7 +153,7 @@ export const MobileCard: React.FC<{ med: Medicine } & CardActions> = ({ med, onR
       onClick={() => onOpenDetail(med)}
       role="button"
       tabIndex={0}
-      onKeyDown={e => { if (e.key === 'Enter') onOpenDetail(med); }}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenDetail(med); } }}
     >
       <CardHead med={med} subtitle={`${med.form_type}${med.brand ? ' · ' + med.brand : ''}${med.symptoms_treated ? ' · ' + med.symptoms_treated.split(',')[0] : ''}`} />
 
@@ -210,7 +210,7 @@ export const MobileMiniCard: React.FC<{ med: Medicine } & CardActions> = ({ med,
       onClick={() => onOpenDetail(med)}
       role="button"
       tabIndex={0}
-      onKeyDown={e => { if (e.key === 'Enter') onOpenDetail(med); }}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenDetail(med); } }}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2.5 min-w-0">

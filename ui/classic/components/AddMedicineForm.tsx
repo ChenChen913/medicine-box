@@ -42,6 +42,8 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess, editingMed }) =>
       usage_frequency_score: 0
     }
   );
+  // 提交失败提示（服务层抛错时展示，表单保留、已填内容不丢）
+  const [submitError, setSubmitError] = useState('');
   // 图片预览只认本地 base64；旧数据里可能残留外链地址，不预览也不展示
   const [previewImage, setPreviewImage] = useState<string>(
     editingMed?.image_url && editingMed.image_url.startsWith('data:') ? editingMed.image_url : ''
@@ -69,6 +71,7 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess, editingMed }) =>
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError('');
 
     let finalDosage = formData.dosage_instruction || '';
     if (dosageFreq && dosageAmount) {
@@ -103,22 +106,28 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess, editingMed }) =>
       form_type: formData.form_type as FormType,
     };
 
-    if (editingMed) {
-      // 编辑：整体替换原记录，保留原 id 和使用频率分数
-      const updated: Medicine = {
-        ...editingMed,
-        ...common,
-        id: editingMed.id,
-        usage_frequency_score: editingMed.usage_frequency_score
-      };
-      await MedicineService.updateMedicine(updated);
-    } else {
-      const newMed: Medicine = {
-        id: Date.now().toString(),
-        ...common,
-        usage_frequency_score: 0
-      };
-      await MedicineService.addMedicine(newMed);
+    try {
+      if (editingMed) {
+        // 编辑：整体替换原记录，保留原 id 和使用频率分数
+        const updated: Medicine = {
+          ...editingMed,
+          ...common,
+          id: editingMed.id,
+          usage_frequency_score: editingMed.usage_frequency_score
+        };
+        await MedicineService.updateMedicine(updated);
+      } else {
+        const newMed: Medicine = {
+          id: Date.now().toString(),
+          ...common,
+          usage_frequency_score: 0
+        };
+        await MedicineService.addMedicine(newMed);
+      }
+    } catch (err) {
+      // 服务层校验/存储失败：展示原因，表单保留、已填内容不丢
+      setSubmitError(err instanceof Error ? err.message : '保存失败，请重试');
+      return;
     }
     onSuccess();
   };
@@ -135,6 +144,9 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess, editingMed }) =>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {submitError && (
+            <p className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl p-3" role="alert">{submitError}</p>
+          )}
           <div className="flex justify-center">
             <div className="relative w-32 h-32 bg-slate-50 border-2 border-dashed border-slate-300 rounded-2xl flex flex-col items-center justify-center overflow-hidden hover:border-emerald-400 hover:bg-emerald-50 transition-colors group">
               {previewImage ? (

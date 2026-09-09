@@ -34,6 +34,8 @@ export const DataBackupDialog: React.FC<Props> = ({ onClose, onDone }) => {
   const [mode, setMode] = useState<ImportMode>('merge');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // 清空全部数据：两步确认（第一步展开红色警告区，第二步才真正执行）
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const handleExport = async () => {
     setBusy(true);
@@ -48,7 +50,8 @@ export const DataBackupDialog: React.FC<Props> = ({ onClose, onDone }) => {
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(url);
+      // 立即 revoke 在部分浏览器（尤其移动端）会中断尚未开始的下载，延迟释放更稳妥
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
       onDone(
         `已导出备份：药品 ${payload.counts.medicines} 条、待补货 ${payload.counts.shoppingList} 条、用药记录 ${payload.counts.logs} 条，请妥善保存 JSON 文件`
       );
@@ -75,6 +78,21 @@ export const DataBackupDialog: React.FC<Props> = ({ onClose, onDone }) => {
       setError(e instanceof Error ? e.message : '导入失败：文件内容无法识别');
     } finally {
       setBusy(false);
+    }
+  };
+
+  /** 清空全部数据：二次确认后执行；成功后交给外层 toast + 刷新 */
+  const handleClearAll = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await MedicineService.clearAllData();
+      onDone('已清空系统内全部数据，药箱已重置为空');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '清空失败，请重试');
+    } finally {
+      setBusy(false);
+      setConfirmClear(false);
     }
   };
 
@@ -173,6 +191,53 @@ export const DataBackupDialog: React.FC<Props> = ({ onClose, onDone }) => {
         <p className="text-[11px] text-m3-outline leading-relaxed">
           提示：日常建议「导出备份」保存到云盘/网盘；换新手机后先用「覆盖恢复」导入备份，即可无缝迁移全部数据。
         </p>
+
+        {/* 危险区：清空全部数据（投产/reset 场景；两步确认防误触） */}
+        <section className="rounded-2xl border border-m3-error/30 bg-m3-error-container/30 p-4 flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <Icon name="warning" className="w-[18px] h-[18px] text-m3-error" />
+            <span className="text-sm font-bold text-m3-error">清空全部数据</span>
+          </div>
+          {!confirmClear ? (
+            <>
+              <p className="text-xs text-m3-on-surface-variant leading-relaxed">
+                将删除本系统内的全部药品、待补货清单与用药记录（云端同步时云端也一并清空），操作前建议先导出备份。
+              </p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setConfirmClear(true)}
+                className="h-11 rounded-xl border border-m3-error/40 text-m3-error text-sm font-semibold hover:bg-m3-error/10 active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none"
+              >
+                我要清空全部数据
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-m3-error leading-relaxed" role="alert">
+                确认要清空吗？此操作<b>不可恢复</b>。若还未导出备份，请先取消并导出。
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setConfirmClear(false)}
+                  className="flex-1 h-11 rounded-xl border border-m3-outline-variant text-m3-on-surface text-sm font-semibold hover:bg-m3-surface-container-low transition-colors disabled:opacity-50"
+                >
+                  取消，先导出备份
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={handleClearAll}
+                  className="flex-1 h-11 rounded-xl bg-m3-error text-m3-on-error text-sm font-bold shadow-md hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none"
+                >
+                  {busy ? '清空中…' : '确认清空'}
+                </button>
+              </div>
+            </>
+          )}
+        </section>
       </div>
     </ModalShell>
   );

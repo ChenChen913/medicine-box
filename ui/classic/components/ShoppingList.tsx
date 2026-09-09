@@ -16,9 +16,13 @@ const ShoppingList: React.FC = () => {
   const getReasonTagStyle = (reason: string) => reasonTagStyle[reason] ?? 'bg-blue-50 text-blue-600 border-blue-100';
 
   const loadList = async () => {
-    const all = await MedicineService.getShoppingList();
-    // 用枚举常量而非字符串字面量，避免拼写漂移
-    setItems(all.filter(i => i.status === ShoppingStatus.PENDING));
+    try {
+      const all = await MedicineService.getShoppingList();
+      // 用枚举常量而非字符串字面量，避免拼写漂移
+      setItems(all.filter(i => i.status === ShoppingStatus.PENDING));
+    } catch (e) {
+      console.error('[ShoppingList] 清单加载失败：', e);
+    }
   };
 
   useEffect(() => {
@@ -38,9 +42,13 @@ const ShoppingList: React.FC = () => {
   const handleRestockSubmit = async () => {
     // 数量必须为正数：填 0 会把库存置零，等于没补货
     if (!restockItem || !newQuantity || Number(newQuantity) <= 0 || !newExpiry) return;
-    
-    await MedicineService.restockMedicine(restockItem.id, parseFloat(newQuantity), newExpiry);
-    
+    try {
+      await MedicineService.restockMedicine(restockItem.id, parseFloat(newQuantity), newExpiry);
+    } catch (e) {
+      // 服务层校验失败（非法数量/日期）或存储失败：提示原因，弹窗保留、条目不清
+      alert(e instanceof Error ? e.message : '登记失败，请重试');
+      return;
+    }
     setRestockItem(null);
     loadList();
   };

@@ -9,212 +9,6 @@
 import { Medicine, ShoppingItem, UsageLog, FormType, ShoppingStatus } from '../types';
 import { isSupabaseConfigured, getSupabase } from './supabaseClient';
 
-/**
- * 以今天为基准偏移 N 天的本地日期字符串（YYYY-MM-DD）。
- * 供演示种子数据使用：让「临期 / 已过期」等状态在新装设备上始终可被演示，
- * 不会随真实时间流逝而失效。需在 INITIAL_MEDICINES 之前定义（模块初始化即调用）。
- */
-function daysFromNow(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${mm}-${dd}`;
-}
-
-// --- 首次使用时预置的示例数据 ---
-// brand：品牌字段演示（同名药不同品牌可分条管理）
-const INITIAL_MEDICINES: Medicine[] = [
-  {
-    id: '1',
-    name: '布洛芬缓释胶囊 (芬必得)',
-    brand: '芬必得',
-    form_type: FormType.CAPSULE,
-    category: '止痛药',
-    location: '客厅医药箱第一层',
-    total_quantity: 12,
-    unit: '粒',
-    threshold: 6,
-    expiry_date: '2027-12-31',
-    last_purchase_date: '2023-10-01',
-    symptoms_treated: '头痛, 牙痛, 痛经, 发热',
-    dosage_instruction: '每日2次，每次1粒',
-    daily_usage: 2,
-    side_effects: '恶心、呕吐、胃烧灼感或轻度消化不良、胃肠道溃疡及出血等。',
-    usage_frequency_score: 15
-  },
-  {
-    id: '2',
-    name: '感冒灵颗粒',
-    brand: '999',
-    form_type: FormType.GRANULE,
-    category: '感冒药',
-    location: '客厅医药箱第二层',
-    total_quantity: 5,
-    unit: '袋',
-    threshold: 3,
-    expiry_date: '2027-05-20',
-    last_purchase_date: '2023-11-15',
-    symptoms_treated: '感冒引起的头痛, 发热, 鼻塞, 流涕',
-    dosage_instruction: '每日3次，每次1袋',
-    daily_usage: 3,
-    side_effects: '偶见皮疹、荨麻疹、药热及粒细胞减少。',
-    usage_frequency_score: 20
-  },
-  {
-    id: '3',
-    name: '阿莫西林胶囊',
-    brand: '华北制药',
-    form_type: FormType.CAPSULE,
-    category: '抗生素',
-    location: '主卧抽屉',
-    total_quantity: 24,
-    unit: '粒',
-    threshold: 10,
-    expiry_date: '2027-08-10',
-    last_purchase_date: '2023-09-01',
-    symptoms_treated: '呼吸道感染, 泌尿道感染',
-    dosage_instruction: '每日3次，每次2粒',
-    daily_usage: 6,
-    side_effects: '恶心、呕吐、腹泻及假膜性肠炎等胃肠道反应。',
-    usage_frequency_score: 5
-  },
-  {
-    id: '4',
-    name: '蒙脱石散 (思密达)',
-    brand: '思密达',
-    form_type: FormType.GRANULE,
-    category: '肠胃药',
-    location: '客厅医药箱',
-    total_quantity: 8,
-    unit: '袋',
-    threshold: 4,
-    expiry_date: '2028-06-01',
-    last_purchase_date: '2024-01-10',
-    symptoms_treated: '急慢性腹泻',
-    dosage_instruction: '每日3次，每次1袋',
-    daily_usage: 3,
-    side_effects: '少数人可能产生轻度便秘。',
-    usage_frequency_score: 8
-  },
-  {
-    id: '5',
-    name: '碘伏消毒液',
-    form_type: FormType.LIQUID,
-    category: '外用药',
-    location: '急救包',
-    total_quantity: 50,
-    unit: 'ml',
-    threshold: 20,
-    expiry_date: '2027-11-30',
-    last_purchase_date: '2023-06-01',
-    symptoms_treated: '皮肤消毒, 小伤口处理',
-    dosage_instruction: '外用，适量涂抹',
-    daily_usage: 5, 
-    side_effects: '极个别病例可见皮肤过敏反应。',
-    usage_frequency_score: 12
-  },
-  {
-    id: '6',
-    name: '创可贴',
-    form_type: FormType.OTHER,
-    category: '医疗器械',
-    location: '玄关杂物盒',
-    total_quantity: 0,
-    unit: '片',
-    threshold: 10,
-    expiry_date: '2028-01-01',
-    last_purchase_date: '2022-01-01',
-    symptoms_treated: '小创口止血, 护创',
-    dosage_instruction: '清洁伤口后贴敷',
-    daily_usage: 1,
-    side_effects: '胶布过敏者慎用。',
-    usage_frequency_score: 30
-  },
-  {
-    id: '7',
-    name: '维生素C泡腾片',
-    brand: '力度伸',
-    form_type: FormType.TABLET,
-    category: '保健品',
-    location: '厨房柜子',
-    total_quantity: 15,
-    unit: '片',
-    threshold: 5,
-    expiry_date: '2027-03-15',
-    last_purchase_date: '2023-12-20',
-    symptoms_treated: '增强免疫力, 预防坏血病',
-    dosage_instruction: '每日1次，每次1片',
-    daily_usage: 1,
-    side_effects: '长期过量服用可能导致尿路结石。',
-    usage_frequency_score: 25
-  },
-  {
-    id: '8',
-    name: '氯雷他定片 (开瑞坦)',
-    brand: '开瑞坦',
-    form_type: FormType.TABLET,
-    category: '抗过敏',
-    location: '卧室抽屉',
-    total_quantity: 6,
-    unit: '片',
-    threshold: 3,
-    // 动态日期：保持“过期约 20 天”的真实演示状态，不随时间漂移成多年前
-    expiry_date: daysFromNow(-20),
-    last_purchase_date: '2020-01-01',
-    symptoms_treated: '过敏性鼻炎, 荨麻疹',
-    dosage_instruction: '每日1次，每次1片',
-    daily_usage: 1,
-    side_effects: '乏力、头痛、嗜睡、口干等。',
-    usage_frequency_score: 2
-  },
-  {
-    id: '9',
-    name: '藿香正气水',
-    brand: '太极',
-    form_type: FormType.LIQUID,
-    category: '肠胃药',
-    location: '客厅医药箱',
-    total_quantity: 10,
-    unit: '支',
-    threshold: 5,
-    expiry_date: '2027-06-30',
-    last_purchase_date: '2023-07-01',
-    symptoms_treated: '中暑, 脘腹胀痛',
-    dosage_instruction: '每日2次，每次1支',
-    daily_usage: 2,
-    side_effects: '含酒精，服用后不得驾驶。',
-    usage_frequency_score: 4
-  },
-  {
-    id: '10',
-    name: '人工泪液滴眼液',
-    form_type: FormType.OTHER,
-    category: '眼科',
-    location: '书房桌面',
-    total_quantity: 1,
-    unit: '瓶',
-    threshold: 1,
-    expiry_date: '2027-12-12',
-    last_purchase_date: '2024-01-20',
-    symptoms_treated: '眼干, 眼涩',
-    dosage_instruction: '滴入眼睑内，一次1-2滴',
-    daily_usage: 0.1,
-    side_effects: '偶见眼部刺痛。',
-    usage_frequency_score: 50
-  },
-  { id: '11', name: '健胃消食片', brand: '江中', category: '肠胃药', form_type: FormType.TABLET, location: '餐厅', total_quantity: 32, unit: '片', threshold: 10, expiry_date: '2027-10-01', last_purchase_date: '2023-11-11', symptoms_treated: '消化不良', dosage_instruction: '每日3次，每次3片', daily_usage: 9, side_effects: '无', usage_frequency_score: 10 },
-  { id: '12', name: '云南白药喷雾', category: '外用药', form_type: FormType.SPRAY, location: '运动包', total_quantity: 1, unit: '瓶', threshold: 1, expiry_date: daysFromNow(25), last_purchase_date: '2023-12-01', symptoms_treated: '跌打损伤', dosage_instruction: '每日3-5次，喷患处', daily_usage: 0.2, side_effects: '皮肤过敏', usage_frequency_score: 6 },
-  { id: '13', name: '奥美拉唑肠溶胶囊', brand: '阿斯利康', category: '肠胃药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 14, unit: '粒', threshold: 7, expiry_date: '2028-02-01', last_purchase_date: '2023-08-01', symptoms_treated: '胃酸过多', dosage_instruction: '每日1次，每次1粒', daily_usage: 1, side_effects: '口干', usage_frequency_score: 9 },
-  { id: '14', name: '连花清瘟胶囊', brand: '以岭', category: '感冒药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 48, unit: '粒', threshold: 24, expiry_date: '2027-09-09', last_purchase_date: '2022-12-01', symptoms_treated: '流感', dosage_instruction: '每日3次，每次4粒', daily_usage: 12, side_effects: '胃部不适', usage_frequency_score: 40 },
-  { id: '15', name: '红霉素软膏', category: '外用药', form_type: FormType.TOPICAL, location: '床头柜', total_quantity: 1, unit: '支', threshold: 1, expiry_date: '2027-01-01', last_purchase_date: '2023-01-01', symptoms_treated: '皮肤感染', dosage_instruction: '每日2次，涂抹患处', daily_usage: 0.1, side_effects: '偶见刺激', usage_frequency_score: 3 },
-  { id: '16', name: '褪黑素', brand: '汤臣倍健', category: '保健品', form_type: FormType.TABLET, location: '床头柜', total_quantity: 60, unit: '粒', threshold: 10, expiry_date: '2028-05-05', last_purchase_date: '2023-10-10', symptoms_treated: '失眠', dosage_instruction: '睡前1粒', daily_usage: 1, side_effects: '白天嗜睡', usage_frequency_score: 100 },
-  { id: '17', name: '诺氟沙星胶囊', category: '肠胃药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 20, unit: '粒', threshold: 6, expiry_date: '2019-01-01', last_purchase_date: '2018-01-01', symptoms_treated: '细菌性痢疾', dosage_instruction: '每日2次，每次2粒', daily_usage: 4, side_effects: '软骨损害', usage_frequency_score: 0 },
-  { id: '18', name: '阿司匹林肠溶片', brand: '拜耳', category: '心脑血管', form_type: FormType.TABLET, location: '老人房', total_quantity: 100, unit: '片', threshold: 30, expiry_date: '2028-03-03', last_purchase_date: '2023-11-01', symptoms_treated: '血栓预防', dosage_instruction: '每日1次，每次1片', daily_usage: 1, side_effects: '出血倾向', usage_frequency_score: 90 },
-  { id: '19', name: '金嗓子喉片', brand: '金嗓子', category: '咽喉', form_type: FormType.TABLET, location: '包里', total_quantity: 5, unit: '片', threshold: 5, expiry_date: daysFromNow(12), last_purchase_date: '2023-09-09', symptoms_treated: '咽喉肿痛', dosage_instruction: '含服，每小时1-2片', daily_usage: 3, side_effects: '无', usage_frequency_score: 18 },
-  { id: '20', name: '风油精', category: '外用药', form_type: FormType.LIQUID, location: '客厅茶几', total_quantity: 2, unit: '瓶', threshold: 1, expiry_date: '2028-10-10', last_purchase_date: '2021-10-10', symptoms_treated: '蚊虫叮咬', dosage_instruction: '适量涂抹', daily_usage: 0.1, side_effects: '刺激眼睛', usage_frequency_score: 11 },
-];
-
 interface DBStructure {
   medicines: Medicine[];
   shoppingList: ShoppingItem[];
@@ -352,7 +146,7 @@ function settleMatchingRestocks(data: DBStructure, med: Medicine): string[] {
 }
 
 // ==========================================================
-// 品牌字段：规范化 + 演示数据迁移（老用户也能看到品牌与分品牌用药记录）
+// 品牌字段：规范化与同名同品牌合并判定
 // ==========================================================
 
 /** 品牌规范化：trim；未设置（undefined / 空白）统一为 ''，用于比较与入库 */
@@ -376,127 +170,37 @@ export function isSameMedicineIdentity(
   );
 }
 
+// ==========================================================
+// 投产清空（一次性，自动执行）
+// ==========================================================
+
 /**
- * 品牌演示迁移（一次性，幂等）：
- *  1. 给「id+name 与种子一致且从未填过品牌」的老药品补上演示品牌
- *     （用户自建、改过名或填过品牌的条目一律不动）；
- *  2. 追加一条同名不同品牌的「阿莫西林胶囊 · 珠海联邦」，演示同名药分品牌管理；
- *  3. 为两个品牌的阿莫西林播种近两周的分品牌用药记录，
- *     让「用药记录按品牌区分」开箱即可看到效果。
- *  仅在 localStorage 可读的设备执行一次（flag 封口）；各子步骤自带条件幂等，
- *  即使 flag 丢失（清浏览器数据）也不会重复插入（同名同品牌存在即跳过）。
+ * 投产重置迁移（一次性，幂等）。
+ * 背景：项目于 2026-09-09 正式投入使用，此前各设备浏览器里保存的都是
+ * 开发/演示阶段生成的虚构数据（种子药品、演示品牌、模拟分品牌用药打卡、
+ * 演示补货条目等），正式使用前必须清空。
+ * 行为：新版本首次加载时把三张表一次性清空并用 localStorage 标记封口，
+ * 之后不再执行。全部演示数据已留档于仓库 backup/ 目录
+ * （均为虚构数据，非真实用户数据，详见 backup/README.md）；
+ * 后续需要做功能测试时，可在应用内「数据备份与恢复 → 导入备份」恢复该文件。
  */
-const BRAND_SEED_FLAG = 'smart-medicine-box:brand-seed:v1';
+const PROD_RESET_FLAG = 'smart-medicine-box:prod-reset:v1';
 
-/** 老种子药品的演示品牌（id+name 双重匹配才生效） */
-const SEED_BRANDS: Record<string, { name: string; brand: string }> = {
-  '1': { name: '布洛芬缓释胶囊 (芬必得)', brand: '芬必得' },
-  '2': { name: '感冒灵颗粒', brand: '999' },
-  '3': { name: '阿莫西林胶囊', brand: '华北制药' },
-  '4': { name: '蒙脱石散 (思密达)', brand: '思密达' },
-  '7': { name: '维生素C泡腾片', brand: '力度伸' },
-  '8': { name: '氯雷他定片 (开瑞坦)', brand: '开瑞坦' },
-  '9': { name: '藿香正气水', brand: '太极' },
-  '11': { name: '健胃消食片', brand: '江中' },
-  '13': { name: '奥美拉唑肠溶胶囊', brand: '阿斯利康' },
-  '14': { name: '连花清瘟胶囊', brand: '以岭' },
-  '16': { name: '褪黑素', brand: '汤臣倍健' },
-  '18': { name: '阿司匹林肠溶片', brand: '拜耳' },
-  '19': { name: '金嗓子喉片', brand: '金嗓子' },
-};
-
-/** 生成 N 天前某时刻的 ISO 时间戳（模拟打卡时间用，本地时区） */
-function daysAgoIso(days: number, hour: number, minute: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  d.setHours(hour, minute, 0, 0);
-  return d.toISOString();
-}
-
-function seedBrandDemo(data: DBStructure): boolean {
+function resetForProduction(data: DBStructure): boolean {
   try {
-    if (localStorage.getItem(BRAND_SEED_FLAG)) return false;
+    if (localStorage.getItem(PROD_RESET_FLAG)) return false;
   } catch {
-    // localStorage 不可用（隐私模式等）：跳过演示迁移，避免每次加载都尝试
+    // localStorage 不可用（隐私模式等）：本地存储本身不可写，无需清空
     return false;
   }
-
-  let changed = false;
-
-  // 1) 老种子药品补品牌（id+name 一致且从未设置过品牌才补）
-  data.medicines.forEach(med => {
-    const seed = SEED_BRANDS[String(med.id)];
-    if (!seed || seed.name !== med.name) return;
-    if (normBrand(med.brand) !== '') return; // 用户已填过品牌，不动
-    med.brand = seed.brand;
-    changed = true;
-  });
-
-  // 2) 追加同名不同品牌的阿莫西林（仅当 id 与「同名+同品牌」都不存在时）
-  const amoxA = data.medicines.find(m => String(m.id) === '3' && m.name === '阿莫西林胶囊');
-  const amoxBId = 'seed-amox-b';
-  const hasAmoxB =
-    data.medicines.some(m => String(m.id) === amoxBId) ||
-    data.medicines.some(m => isSameMedicineIdentity(m, { name: '阿莫西林胶囊', form_type: FormType.CAPSULE, brand: '珠海联邦' }));
-  let amoxB: Medicine | undefined;
-  if (!hasAmoxB) {
-    amoxB = {
-      id: amoxBId,
-      name: '阿莫西林胶囊',
-      brand: '珠海联邦',
-      form_type: FormType.CAPSULE,
-      category: '抗生素',
-      location: '客厅医药箱第二层',
-      total_quantity: 16,
-      unit: '粒',
-      threshold: 8,
-      expiry_date: daysFromNow(180),
-      last_purchase_date: daysFromNow(-9),
-      symptoms_treated: '呼吸道感染, 泌尿道感染',
-      dosage_instruction: '每日3次，每次2粒',
-      daily_usage: 6,
-      side_effects: '恶心、呕吐、腹泻及假膜性肠炎等胃肠道反应。',
-      usage_frequency_score: 3,
-    };
-    data.medicines.push(amoxB);
-    changed = true;
-  }
-
-  // 3) 播种分品牌用药记录（logs 里没有 seed-log- 前缀的演示记录时才播种；
-  //    品牌条目必须真实存在于药箱，避免产生指向已删药品的孤儿记录）
-  const hasSeedLogs = data.logs.some(l => String(l.id).startsWith('seed-log-'));
-  if (!hasSeedLogs) {
-    const seedLogs: UsageLog[] = [];
-    const pushLogs = (med: Medicine | undefined, dayOffsets: number[], tag: string) => {
-      if (!med) return;
-      const times = [8 * 60 + 10, 12 * 60 + 30, 19 * 60 + 20]; // 早/中/晚三个打卡时点
-      dayOffsets.forEach((d, i) => {
-        const t = times[i % times.length];
-        seedLogs.push({
-          id: `seed-log-${tag}${i + 1}`,
-          medicine_id: String(med.id),
-          medicine_name: med.name,
-          brand: med.brand,
-          amount: 2,
-          log_time: daysAgoIso(d, Math.floor(t / 60), t % 60),
-        });
-      });
-    };
-    // 华北制药：14 天内 8 次；珠海联邦：9 天内 5 次 → 用药记录里两个品牌分明
-    pushLogs(amoxA ?? data.medicines.find(m => m.name === '阿莫西林胶囊' && m.brand === '华北制药'),
-      [1, 2, 4, 5, 7, 9, 11, 13], 'a');
-    pushLogs(amoxB, [1, 3, 6, 8, 12], 'b');
-    if (seedLogs.length > 0) {
-      data.logs.push(...seedLogs);
-      changed = true;
-    }
-  }
-
+  data.medicines = [];
+  data.shoppingList = [];
+  data.logs = [];
   try {
-    localStorage.setItem(BRAND_SEED_FLAG, new Date().toISOString());
+    localStorage.setItem(PROD_RESET_FLAG, new Date().toISOString());
   } catch { /* ignore */ }
-  if (changed) console.info('[演示数据] 已补品牌字段并播种分品牌用药记录（阿莫西林 · 华北制药 / 珠海联邦）');
-  return changed;
+  console.info('[投产重置] 已清空演示/历史数据，药箱从空开始（演示数据备份见仓库 backup/ 目录）');
+  return true;
 }
 
 // ==========================================================
@@ -504,7 +208,7 @@ function seedBrandDemo(data: DBStructure): boolean {
 // ==========================================================
 const LS_KEY = 'smart-medicine-box:db:v1';
 
-function localRead(): DBStructure {
+function localRead(): DBStructure | null {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return EMPTY_DB();
@@ -516,7 +220,9 @@ function localRead(): DBStructure {
     };
   } catch (e) {
     console.error('[localStorage] 读取失败：', e);
-    return EMPTY_DB();
+    // 必须返回 null（读取失败语义），让上层放弃写回：
+    // 旧实现此处返回 EMPTY_DB，一旦存储内容损坏，任何一次变更写入都会把真实数据覆盖掉
+    return null;
   }
 }
 
@@ -694,9 +400,12 @@ async function sbWrite(db: DBStructure): Promise<void> {
   ]);
 }
 
+/** 读取失败的统一文案：宁可让操作失败，也不能拿空数据覆盖现有数据 */
+const READ_FAIL_MSG = '数据读取失败：存储不可达或内容已损坏，为保护现有数据已中止本次操作';
+
 /**
  * 读取整库。返回 null 表示「读取失败」，此时调用方必须放弃写入，
- * 避免用空数据覆盖掉云端已有数据。
+ * 避免用空数据覆盖掉已有数据。
  */
 async function readDB(): Promise<DBStructure | null> {
   if (isSupabaseConfigured) {
@@ -756,87 +465,6 @@ function addExpiredToShoppingList(data: DBStructure): boolean {
   return hasChanges;
 }
 
-/**
- * 旧版演示数据效期迁移（一次性，自动执行）。
- *
- * 背景：2024~2025 年间播种的示例数据按「当年年份」填写效期，随着时间推移
- * 陆续过期，老用户的药箱里 20 条演示数据有 17 条标红「已过期」，几乎无法
- * 正常演示系统功能。由于播种只在数据为空时执行，仅更新种子代码救不了
- * 已存在的旧数据，因此这里做一次幂等迁移：
- *
- *  - 仅匹配「id + name 与旧版种子完全一致，且效期仍等于旧种子原始值」的条目，
- *    即确认是未被用户修改过的演示数据才刷新；用户自建、改名或已手动改过
- *    效期的条目一律不动。
- *  - 刷新结果保留完整的状态谱系：多数转为未来效期（正常备用），2 条转为
- *    「临期 30 天内」演示临期提醒，另保留 2 条过期样本（近期过期 + 深度过期）
- *    以便继续演示过期检测与清理链路。
- *  - 刷新后同步清理这些药品遗留的「过期」补货条目：药品已不再过期，
- *    留在补货清单里属于误导性提醒。
- *  - 双重防重跑：localStorage 标记 + 旧值精确匹配。即使标记丢失
- *    （如清空浏览器数据），只要效期已被刷新过、与旧值不再相等，就不会二次覆盖。
- */
-const DEMO_REFRESH_FLAG = 'smart-medicine-box:demo-refresh:v1';
-
-/** 旧版种子（首版提交）的效期快照 → 迁移后的演示效期 */
-const LEGACY_DEMO_EXPIRY: Record<string, { name: string; old: string; next: string }> = {
-  '1': { name: '布洛芬缓释胶囊 (芬必得)', old: '2025-12-31', next: '2027-12-31' },
-  '2': { name: '感冒灵颗粒', old: '2024-05-20', next: '2027-05-20' },
-  '3': { name: '阿莫西林胶囊', old: '2025-08-10', next: '2027-08-10' },
-  '4': { name: '蒙脱石散 (思密达)', old: '2026-01-01', next: '2028-06-01' },
-  '5': { name: '碘伏消毒液', old: '2024-11-30', next: '2027-11-30' },
-  '7': { name: '维生素C泡腾片', old: '2025-03-15', next: '2027-03-15' },
-  '8': { name: '氯雷他定片 (开瑞坦)', old: '2022-01-01', next: daysFromNow(-20) },
-  '9': { name: '藿香正气水', old: '2025-06-30', next: '2027-06-30' },
-  '10': { name: '人工泪液滴眼液', old: '2024-12-12', next: '2027-12-12' },
-  '11': { name: '健胃消食片', old: '2025-10-01', next: '2027-10-01' },
-  '12': { name: '云南白药喷雾', old: '2026-05-01', next: daysFromNow(25) },
-  '13': { name: '奥美拉唑肠溶胶囊', old: '2025-02-01', next: '2028-02-01' },
-  '14': { name: '连花清瘟胶囊', old: '2024-09-09', next: '2027-09-09' },
-  '16': { name: '褪黑素', old: '2025-05-05', next: '2028-05-05' },
-  '18': { name: '阿司匹林肠溶片', old: '2026-03-03', next: '2028-03-03' },
-  '19': { name: '金嗓子喉片', old: '2025-08-08', next: daysFromNow(12) },
-};
-
-function refreshLegacyDemoData(data: DBStructure): boolean {
-  // 已执行过迁移的设备直接跳过
-  try {
-    if (localStorage.getItem(DEMO_REFRESH_FLAG)) return false;
-  } catch {
-    // localStorage 不可用（隐私模式等）：仅靠「旧值精确匹配」保护，仍可安全执行
-  }
-
-  const today = todayDateString();
-  let refreshed = 0;
-
-  data.medicines.forEach(med => {
-    const legacy = LEGACY_DEMO_EXPIRY[String(med.id)];
-    // id + name 同时匹配，且效期仍等于旧种子原始值，才视为未修改过的演示数据
-    if (!legacy || legacy.name !== med.name || med.expiry_date !== legacy.old) return;
-    med.expiry_date = legacy.next;
-    refreshed += 1;
-  });
-
-  if (refreshed === 0) return false;
-
-  // 清理已不再过期的药品遗留的「过期」补货条目（对应药品已删除的孤儿条目不在此处理）
-  const expiryByName = new Map(data.medicines.map(m => [m.name, m.expiry_date || '']));
-  const beforeCount = data.shoppingList.length;
-  data.shoppingList = data.shoppingList.filter(item => {
-    if (item.reason !== '过期' || item.status !== ShoppingStatus.PENDING) return true;
-    const expiry = expiryByName.get(item.medicine_name);
-    // 对应药品不存在 → 保留；仍过期 → 保留；已不再过期 → 移除
-    return expiry === undefined || expiry < today;
-  });
-  const cleaned = beforeCount - data.shoppingList.length;
-
-  try {
-    localStorage.setItem(DEMO_REFRESH_FLAG, new Date().toISOString());
-  } catch { /* ignore */ }
-
-  console.info(`[演示数据] 已刷新 ${refreshed} 条示例药品效期（含 2 条临期、2 条过期演示），清理误导性补货提醒 ${cleaned} 条`);
-  return true;
-}
-
 export const MedicineService = {
   // --- 底层读写（对外保留，便于调试） ---
   fetchData: async (): Promise<DBStructure> => (await readDB()) ?? EMPTY_DB(),
@@ -846,24 +474,14 @@ export const MedicineService = {
   // --- 核心业务: 读取与初始化 ---
   getMedicines: async (): Promise<Medicine[]> => {
     const data = await readDB();
-    // 读取失败直接抛错：宁可让 UI 明确报错，也不能拿空数据/初始数据覆盖云端。
+    // 读取失败直接抛错：宁可让 UI 明确报错，也不能拿空数据覆盖现有数据。
     // （此前返回 []，UI 上「加载失败」与「空药箱」无法区分）
-    if (!data) throw new Error('数据读取失败：云端数据库不可达，为保护云端数据已中止本次读写');
+    if (!data) throw new Error(READ_FAIL_MSG);
 
     let dirty = false;
 
-    if (!data.medicines || data.medicines.length === 0) {
-      // 首次使用：播种示例数据。注意拷贝一份，避免业务代码改动共享常量。
-      data.medicines = INITIAL_MEDICINES.map(m => ({ ...m }));
-      dirty = true;
-    }
-
-    // 旧版演示数据效期迁移（一次性，见函数注释；需在过期检测前执行，
-    // 让「不再过期」药品的补货条目先被清理，再由过期检测为仍过期的样本补齐提醒）
-    if (refreshLegacyDemoData(data)) dirty = true;
-
-    // 品牌演示迁移（一次性）：补品牌 + 同名双品牌阿莫西林 + 分品牌用药记录
-    if (seedBrandDemo(data)) dirty = true;
+    // 投产重置（一次性）：正式投入使用前清空演示/历史数据（见函数注释与 backup/README.md）
+    if (resetForProduction(data)) dirty = true;
 
     // 过期检测每次加载都执行（此前只在首次播种时运行，
     // 导致药品后来过期时永远不会自动进入补货清单）。
@@ -877,7 +495,8 @@ export const MedicineService = {
 
   getShoppingList: async (): Promise<ShoppingItem[]> => {
     const data = await readDB();
-    return data?.shoppingList ?? [];
+    if (!data) throw new Error(READ_FAIL_MSG);
+    return data.shoppingList;
   },
 
   /**
@@ -886,7 +505,7 @@ export const MedicineService = {
    */
   addToShoppingList: async (entries: { name: string; reason: ShoppingItem['reason'] }[]): Promise<number> => {
     const data = await readDB();
-    if (!data) return 0;
+    if (!data) throw new Error(READ_FAIL_MSG);
 
     let added = 0;
     entries.forEach(({ name, reason }) => {
@@ -912,7 +531,8 @@ export const MedicineService = {
   /** 读取全部用药记录（新 UI 的打卡时间线 / 用药记录页使用），按时间倒序 */
   getUsageLogs: async (): Promise<UsageLog[]> => {
     const data = await readDB();
-    return [...(data?.logs ?? [])].sort((a, b) => b.log_time.localeCompare(a.log_time));
+    if (!data) throw new Error(READ_FAIL_MSG);
+    return [...data.logs].sort((a, b) => b.log_time.localeCompare(a.log_time));
   },
 
   // --- 排序算法 (纯函数，无需异步；分类权重复用模块级 getCategoryWeight) ---
@@ -931,14 +551,17 @@ export const MedicineService = {
   // --- 业务操作 (异步) ---
   consumeMedicine: async (id: string, amount: number) => {
     const data = await readDB();
-    if (!data) return;
+    if (!data) throw new Error(READ_FAIL_MSG);
 
     const meds = data.medicines;
     const targetIndex = meds.findIndex(m => String(m.id) === String(id));
     if (targetIndex === -1) return;
 
     const target = meds[targetIndex];
-    target.total_quantity = Math.max(0, target.total_quantity - amount);
+    // 数量防御：负数等于凭空入库、NaN 会把库存污染成 NaN，一律拒绝（UI 已有 clamp，这里兜底）
+    const amt = Number(amount);
+    if (!Number.isFinite(amt) || amt <= 0) throw new Error('用药数量必须为大于 0 的数字');
+    target.total_quantity = Math.max(0, target.total_quantity - amt);
     target.usage_frequency_score += 1;
 
     const newLog: UsageLog = {
@@ -947,7 +570,7 @@ export const MedicineService = {
       medicine_name: target.name,
       // 品牌快照：同名药不同品牌的用量可在用药记录里分别统计
       brand: target.brand || undefined,
-      amount,
+      amount: amt,
       log_time: new Date().toISOString()
     };
     data.logs.push(newLog);
@@ -991,7 +614,7 @@ export const MedicineService = {
    */
   addMedicine: async (med: Medicine): Promise<{ merged: boolean; offsetRestocks: string[] }> => {
     const data = await readDB();
-    if (!data) return { merged: false, offsetRestocks: [] };
+    if (!data) throw new Error(READ_FAIL_MSG);
 
     const idx = data.medicines.findIndex(m => isSameMedicineIdentity(m, med));
 
@@ -1007,6 +630,9 @@ export const MedicineService = {
         name: existing.name,
         usage_frequency_score: existing.usage_frequency_score,
         last_purchase_date: todayDateString(),
+        // 入库表单没有「删除原图」入口（imageRemoved 仅存在于编辑表单），
+        // 合并入库时未重新上传图片 → 保留原记录的图片，避免误把旧图清掉
+        ...(med.image_url ? {} : { image_url: existing.image_url }),
       };
       data.medicines[idx] = finalMed;
     } else {
@@ -1027,7 +653,7 @@ export const MedicineService = {
    */
   updateMedicine: async (med: Medicine, opts?: { previous?: Medicine }): Promise<{ offsetRestocks: string[] }> => {
     const data = await readDB();
-    if (!data) return { offsetRestocks: [] };
+    if (!data) throw new Error(READ_FAIL_MSG);
     const targetId = String(med.id).trim();
     const idx = data.medicines.findIndex(m => String(m.id).trim() === targetId);
     if (idx === -1) return { offsetRestocks: [] };
@@ -1050,7 +676,7 @@ export const MedicineService = {
 
   deleteMedicine: async (id: string) => {
     const data = await readDB();
-    if (!data) return;
+    if (!data) throw new Error(READ_FAIL_MSG);
     const targetId = String(id).trim();
     const target = data.medicines.find(m => String(m.id).trim() === targetId);
     data.medicines = data.medicines.filter(m => String(m.id).trim() !== targetId);
@@ -1066,7 +692,15 @@ export const MedicineService = {
 
   restockMedicine: async (itemId: string, newQuantity: number, newExpiryDate: string) => {
     const data = await readDB();
-    if (!data) return;
+    if (!data) throw new Error(READ_FAIL_MSG);
+
+    // 输入防御：数量必须为有限数字且 >= 0、日期必须为 YYYY-MM-DD，
+    // 不合法直接中止（清单条目保留），避免把库存/效期污染成 NaN 或垃圾串
+    const qty = Number(newQuantity);
+    const expiry = String(newExpiryDate || '').slice(0, 10);
+    if (!Number.isFinite(qty) || qty < 0 || !/^\d{4}-\d{2}-\d{2}$/.test(expiry)) {
+      throw new Error('购入数量或有效期格式不正确，本次登记未保存');
+    }
 
     const targetItem = data.shoppingList.find(item => String(item.id) === String(itemId));
     data.shoppingList = data.shoppingList.filter(item => String(item.id) !== String(itemId));
@@ -1074,12 +708,24 @@ export const MedicineService = {
     if (targetItem) {
       const medIndex = data.medicines.findIndex(m => m.name === targetItem.medicine_name);
       if (medIndex !== -1) {
-        data.medicines[medIndex].total_quantity = newQuantity;
-        data.medicines[medIndex].expiry_date = newExpiryDate;
+        data.medicines[medIndex].total_quantity = qty;
+        data.medicines[medIndex].expiry_date = expiry;
         data.medicines[medIndex].last_purchase_date = todayDateString();
       }
     }
     await writeDB(data);
+  },
+
+  /**
+   * 清空全部数据（应用内「数据备份与恢复 → 清空全部数据」入口，UI 需二次确认后调用）：
+   * 三张表全部置空写回；Supabase 模式下同步删除云端全部行。
+   * 成功后写入投产重置标记，避免老设备随后的自动投产重置再次执行。
+   */
+  clearAllData: async (): Promise<void> => {
+    await writeDB(EMPTY_DB());
+    try {
+      localStorage.setItem(PROD_RESET_FLAG, new Date().toISOString());
+    } catch { /* ignore */ }
   },
 
   // --- 数据导入导出（备份/恢复/多设备迁移；localStorage 与 Supabase 双后端通用） ---
@@ -1209,6 +855,24 @@ export interface ImportResult {
 const str = (v: unknown, fallback = ''): string =>
   v === null || v === undefined ? fallback : String(v);
 
+/** YYYY-MM-DD 校验（导入清洗用：不合规日期一律置空，避免垃圾串参与过期比较） */
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const date10 = (v: unknown): string => {
+  const s = str(v).slice(0, 10);
+  return DATE_RE.test(s) ? s : '';
+};
+
+/**
+ * 图片字段清洗（导入防御）：仅接受本地 base64 图片（data:image/）与 http(s) 外链，
+ * 其余协议（javascript: 等）一律丢弃，杜绝把危险 URL 带进 <img src>。
+ */
+function sanitizeImageUrl(v: unknown): string {
+  const s = str(v).trim();
+  if (s.startsWith('data:image/')) return s;
+  if (/^https?:\/\//i.test(s)) return s;
+  return '';
+}
+
 /** 清洗单条药品：字段逐一修复类型；缺 id 或 name 返回 null（丢弃） */
 function sanitizeMedicine(raw: unknown): Medicine | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -1217,7 +881,7 @@ function sanitizeMedicine(raw: unknown): Medicine | null {
   const name = str(r.name).trim();
   if (!id || !name) return null;
   const brand = str(r.brand).trim();
-  const image = str(r.image_url).trim();
+  const image = sanitizeImageUrl(r.image_url);
   const formType = (Object.values(FormType) as string[]).includes(str(r.form_type))
     ? (r.form_type as FormType)
     : FormType.OTHER;
@@ -1232,8 +896,8 @@ function sanitizeMedicine(raw: unknown): Medicine | null {
     total_quantity: num(r.total_quantity),
     unit: str(r.unit, '粒'),
     threshold: num(r.threshold),
-    expiry_date: str(r.expiry_date).slice(0, 10),
-    last_purchase_date: str(r.last_purchase_date).slice(0, 10),
+    expiry_date: date10(r.expiry_date),
+    last_purchase_date: date10(r.last_purchase_date),
     symptoms_treated: str(r.symptoms_treated),
     dosage_instruction: str(r.dosage_instruction),
     daily_usage: num(r.daily_usage),
@@ -1251,13 +915,15 @@ function sanitizeLog(raw: unknown): UsageLog | null {
   if (!id || !medicineName) return null;
   const brand = str(r.brand).trim();
   const user = str(r.user ?? r.user_name).trim();
+  const logTime = str(r.log_time).trim();
   return {
     id,
     medicine_id: str(r.medicine_id),
     medicine_name: medicineName,
     ...(brand ? { brand } : {}),
     amount: num(r.amount),
-    log_time: str(r.log_time) || new Date().toISOString(),
+    // 时间非法时兜底为当前时间：避免 Invalid Date 参与排序/按日分组产生 NaN
+    log_time: logTime && !Number.isNaN(new Date(logTime).getTime()) ? logTime : new Date().toISOString(),
     ...(user ? { user } : {}),
   };
 }

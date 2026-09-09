@@ -122,16 +122,19 @@ export function getHealthOverview(medicines: Medicine[]): HealthOverview {
   const normal = total - low - out - expired;
   const score = total === 0 ? 100 : Math.round((normal / total) * 100);
 
+  // 空箱是投产后的初始状态（2026-09-09 起不再预置演示数据），需要引导而非「状态良好」
   let grade = '需关注';
-  if (score >= 85) grade = '优良';
-  else if (score >= 70) grade = '良好';
-  else if (score >= 50) grade = '一般';
-
-  const headline = expired > 0
-    ? '药箱中有过期药品，建议尽快清理更换'
-    : low + out > 0
-      ? '部分常备药品库存偏低，建议及时补足'
-      : '今日药箱状态良好，常备物资充裕';
+  let headline = '今日药箱状态良好，常备物资充裕';
+  if (total === 0) {
+    grade = '待入库';
+    headline = '药箱还是空的，先入库几瓶常备药吧';
+  } else {
+    if (score >= 85) grade = '优良';
+    else if (score >= 70) grade = '良好';
+    else if (score >= 50) grade = '一般';
+    if (expired > 0) headline = '药箱中有过期药品，建议尽快清理更换';
+    else if (low + out > 0) headline = '部分常备药品库存偏低，建议及时补足';
+  }
 
   return { total, normal, low, out, expired, expiringSoon, score, grade, headline };
 }
