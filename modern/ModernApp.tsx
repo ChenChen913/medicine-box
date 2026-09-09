@@ -20,7 +20,7 @@ import { DetailDrawer } from './components/DetailDrawer';
 import { ConsumeDialog, DeleteDialog, MedicineForm } from './components/Dialogs';
 import { RestockView, LogsView } from './components/Views';
 import {
-  ReminderBar, SearchFilter, CategorySections, MobileHealthCard,
+  SearchFilter, CategorySections, MobileHealthCard,
   HealthBanner, MetricGrid, useFilteredMedicines,
   type FilterKey,
 } from './components/HomeContent';
@@ -93,10 +93,6 @@ const ModernApp: React.FC = () => {
 
   // ---- 派生数据 ----
   const overview = useMemo(() => getHealthOverview(medicines), [medicines]);
-  const categoryCount = useMemo(
-    () => new Set(medicines.map(m => m.category || '其他')).size,
-    [medicines]
-  );
   const locations = useMemo(
     () => Array.from(new Set(medicines.map(m => (m.location || '').trim()).filter(Boolean))).sort(),
     [medicines]
@@ -186,10 +182,7 @@ const ModernApp: React.FC = () => {
         alt="家庭药箱"
         className="w-10 h-10 rounded-xl shadow-[0_2px_8px_rgba(15,118,110,0.25)]"
       />
-      <div className="flex flex-col leading-none text-left">
-        <span className="text-lg font-bold text-m3-on-surface tracking-tight">家庭药箱</span>
-        <span className="text-[11px] text-m3-on-surface-variant font-medium mt-1">家庭健康管家</span>
-      </div>
+      <span className="text-lg font-bold text-m3-on-surface tracking-tight">家庭药箱</span>
     </div>
   );
 
@@ -285,11 +278,9 @@ const ModernApp: React.FC = () => {
               {/* 健康概览：桌面横幅+指标（lg+），移动环形卡（<lg） */}
               <div className="hidden lg:grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
                 <HealthBanner o={overview} />
-                <MetricGrid o={overview} categoryCount={categoryCount} filter={filter} onFilter={setFilter} />
+                <MetricGrid o={overview} filter={filter} onFilter={setFilter} />
               </div>
               <div className="lg:hidden"><MobileHealthCard o={overview} filter={filter} onFilter={setFilter} /></div>
-
-              <ReminderBar o={overview} onGenerate={handleGeneratePurchase} />
 
               <SearchFilter
                 query={query} onQuery={setQuery}
@@ -312,7 +303,7 @@ const ModernApp: React.FC = () => {
             </div>
           )}
 
-          {view === 'restock' && <RestockView onChanged={refreshData} />}
+          {view === 'restock' && <RestockView onChanged={refreshData} onGeneratePurchase={handleGeneratePurchase} />}
           {view === 'logs' && <LogsView logs={logs} loading={loading} />}
 
           {/* 页脚 */}
@@ -324,9 +315,8 @@ const ModernApp: React.FC = () => {
                 className="w-6 h-6 rounded-md"
               />
               <span className="text-sm font-semibold text-m3-on-surface">家庭药箱</span>
-              <span className="text-xs text-m3-on-surface-variant ml-1">温润守护每一位家人的常备与急救用药</span>
             </div>
-            <div className="text-xs text-m3-on-surface-variant">© 2026 家庭健康管家 · 关怀、清晰与守护</div>
+            <div className="text-xs text-m3-on-surface-variant">© 2026 家庭药箱</div>
           </footer>
         </div>
       </main>

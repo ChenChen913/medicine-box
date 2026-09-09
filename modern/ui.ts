@@ -104,8 +104,6 @@ export interface HealthOverview {
   grade: string;
   /** 主标题（横幅 headline，基于真实数据动态生成） */
   headline: string;
-  /** 副描述 */
-  summary: string;
 }
 
 export function getHealthOverview(medicines: Medicine[]): HealthOverview {
@@ -129,23 +127,13 @@ export function getHealthOverview(medicines: Medicine[]): HealthOverview {
   else if (score >= 70) grade = '良好';
   else if (score >= 50) grade = '一般';
 
-  const problems: string[] = [];
-  if (low + out > 0) problems.push(`${low + out} 种药品库存偏低`);
-  if (expiringSoon > 0) problems.push(`${expiringSoon} 种将在 30 天内临期`);
-  if (expired > 0) problems.push(`${expired} 种已过期需要清理`);
-
   const headline = expired > 0
     ? '药箱中有过期药品，建议尽快清理更换'
     : low + out > 0
       ? '部分常备药品库存偏低，建议及时补足'
       : '今日药箱状态良好，常备物资充裕';
 
-  const categories = new Set(medicines.map(m => m.category || '其他'));
-  const summary = expired > 0 || problems.length > 0
-    ? `全家药箱共 ${total} 种药品。${problems.join('，')}。请注意换季常备药品的微量补库与临期清退。`
-    : `全家药箱共 ${total} 种药品，覆盖 ${categories.size} 大科类，慢性病周期储备充足，急救耗材完好。`;
-
-  return { total, normal, low, out, expired, expiringSoon, score, grade, headline, summary };
+  return { total, normal, low, out, expired, expiringSoon, score, grade, headline };
 }
 
 // ============ 分类视觉映射 ============
@@ -156,24 +144,22 @@ export interface CategoryMeta {
   iconBg: string;
   /** 图标颜色（tailwind 类） */
   iconColor: string;
-  /** 分区右侧标语 */
-  slogan: string;
 }
 
 export function getCategoryMeta(category: string): CategoryMeta {
   const c = category || '其他';
-  if (c.includes('心脑')) return { icon: 'favorite', iconBg: 'from-m3-error-container/60 to-m3-error-container/20', iconColor: 'text-m3-error', slogan: '长期服药管家 · 每日定时监护' };
-  if (c.includes('感冒') || c.includes('呼吸')) return { icon: 'cloud', iconBg: 'from-m3-secondary-fixed/40 to-m3-primary-fixed/20', iconColor: 'text-m3-primary', slogan: '家庭常备急用 · 换季高频' };
-  if (c.includes('止痛')) return { icon: 'healing', iconBg: 'from-m3-primary-fixed/40 to-m3-secondary-fixed/30', iconColor: 'text-m3-primary', slogan: '头痛发热应对 · 快速缓解' };
-  if (c.includes('肠胃')) return { icon: 'restaurant', iconBg: 'from-m3-tertiary-fixed to-m3-tertiary-fixed-dim/40', iconColor: 'text-m3-tertiary', slogan: '饮食起居管家 · 应急常备' };
-  if (c.includes('抗生素')) return { icon: 'local_pharmacy', iconBg: 'from-m3-surface-container-high to-m3-surface-container', iconColor: 'text-m3-primary', slogan: '遵医嘱使用 · 切勿滥用' };
-  if (c.includes('外用')) return { icon: 'sanitizer', iconBg: 'from-m3-primary-fixed/40 to-m3-secondary-fixed/30', iconColor: 'text-m3-primary', slogan: '意外擦伤消毒 · 即刻响应' };
-  if (c.includes('过敏')) return { icon: 'eco', iconBg: 'from-m3-secondary-fixed/40 to-m3-primary-fixed/20', iconColor: 'text-m3-secondary', slogan: '换季高发期 · 提前防护' };
-  if (c.includes('咽喉')) return { icon: 'graphic_eq', iconBg: 'from-m3-tertiary-fixed to-m3-surface-container', iconColor: 'text-m3-tertiary', slogan: '用嗓过度守护 · 随手含服' };
-  if (c.includes('保健')) return { icon: 'eco', iconBg: 'from-m3-secondary-fixed/30 to-m3-primary-fixed/20', iconColor: 'text-m3-secondary', slogan: '日常营养补充 · 坚持为要' };
-  if (c.includes('器械')) return { icon: 'medical_services', iconBg: 'from-m3-primary-fixed/40 to-m3-secondary-fixed/30', iconColor: 'text-m3-primary', slogan: '急救物资 · 保持充裕' };
-  if (c.includes('眼科')) return { icon: 'visibility', iconBg: 'from-m3-surface-container-high to-m3-surface-container', iconColor: 'text-m3-primary', slogan: '用眼卫生 · 定期更换' };
-  return { icon: 'medication', iconBg: 'from-m3-primary-fixed/40 to-m3-secondary-fixed/30', iconColor: 'text-m3-primary', slogan: '家庭常备 · 定期检查' };
+  if (c.includes('心脑')) return { icon: 'favorite', iconBg: 'from-m3-error-container/60 to-m3-error-container/20', iconColor: 'text-m3-error' };
+  if (c.includes('感冒') || c.includes('呼吸')) return { icon: 'cloud', iconBg: 'from-m3-secondary-fixed/40 to-m3-primary-fixed/20', iconColor: 'text-m3-primary' };
+  if (c.includes('止痛')) return { icon: 'healing', iconBg: 'from-m3-primary-fixed/40 to-m3-secondary-fixed/30', iconColor: 'text-m3-primary' };
+  if (c.includes('肠胃')) return { icon: 'restaurant', iconBg: 'from-m3-tertiary-fixed to-m3-tertiary-fixed-dim/40', iconColor: 'text-m3-tertiary' };
+  if (c.includes('抗生素')) return { icon: 'local_pharmacy', iconBg: 'from-m3-surface-container-high to-m3-surface-container', iconColor: 'text-m3-primary' };
+  if (c.includes('外用')) return { icon: 'sanitizer', iconBg: 'from-m3-primary-fixed/40 to-m3-secondary-fixed/30', iconColor: 'text-m3-primary' };
+  if (c.includes('过敏')) return { icon: 'eco', iconBg: 'from-m3-secondary-fixed/40 to-m3-primary-fixed/20', iconColor: 'text-m3-secondary' };
+  if (c.includes('咽喉')) return { icon: 'graphic_eq', iconBg: 'from-m3-tertiary-fixed to-m3-surface-container', iconColor: 'text-m3-tertiary' };
+  if (c.includes('保健')) return { icon: 'eco', iconBg: 'from-m3-secondary-fixed/30 to-m3-primary-fixed/20', iconColor: 'text-m3-secondary' };
+  if (c.includes('器械')) return { icon: 'medical_services', iconBg: 'from-m3-primary-fixed/40 to-m3-secondary-fixed/30', iconColor: 'text-m3-primary' };
+  if (c.includes('眼科')) return { icon: 'visibility', iconBg: 'from-m3-surface-container-high to-m3-surface-container', iconColor: 'text-m3-primary' };
+  return { icon: 'medication', iconBg: 'from-m3-primary-fixed/40 to-m3-secondary-fixed/30', iconColor: 'text-m3-primary' };
 }
 
 // ============ 时间格式化 ============

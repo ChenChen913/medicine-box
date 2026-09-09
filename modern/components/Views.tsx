@@ -18,16 +18,31 @@ const REASON_STYLE: Record<string, string> = {
   '用尽': 'bg-m3-tertiary-fixed text-m3-on-tertiary-fixed-variant',
 };
 
-export const RestockView: React.FC<{ onChanged: () => void }> = ({ onChanged }) => {
+export const RestockView: React.FC<{ onChanged: () => void; onGeneratePurchase: () => Promise<void> }> = ({ onChanged, onGeneratePurchase }) => {
   const [items, setItems] = useState<ShoppingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [restockItem, setRestockItem] = useState<ShoppingItem | null>(null);
+  const [generating, setGenerating] = useState(false);
+
+  const reloadItems = () =>
+    MedicineService.getShoppingList()
+      .then(all => setItems(all.filter(i => i.status === ShoppingStatus.PENDING)));
 
   useEffect(() => {
-    MedicineService.getShoppingList()
-      .then(all => setItems(all.filter(i => i.status === ShoppingStatus.PENDING)))
-      .finally(() => setLoading(false));
+    reloadItems().finally(() => setLoading(false));
   }, []);
+
+  // 生成采购建议后立即刷新本地列表，让新加入的条目马上可见
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      await onGeneratePurchase();
+      await reloadItems();
+      onChanged();
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   return (
     <div className="max-w-3xl mx-auto px-4 md:px-0">
@@ -36,6 +51,15 @@ export const RestockView: React.FC<{ onChanged: () => void }> = ({ onChanged }) 
         {items.length > 0 && (
           <span className="px-2.5 py-1 rounded-full bg-m3-tertiary-fixed text-m3-on-tertiary-fixed-variant text-xs font-bold">{items.length} 项</span>
         )}
+        <button
+          type="button"
+          onClick={handleGenerate}
+          disabled={generating}
+          className="ml-auto flex items-center gap-1 px-3.5 py-2 rounded-full bg-m3-primary/10 text-m3-primary text-xs font-semibold hover:bg-m3-primary/15 active:scale-95 transition-all disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap"
+        >
+          <Icon name="auto_awesome" className="w-4 h-4" />
+          <span>{generating ? '生成中…' : '一键生成采购单'}</span>
+        </button>
       </div>
 
       {loading ? (

@@ -49,12 +49,13 @@ function CardHead({ med, subtitle, compact }: { med: Medicine; subtitle: string;
   );
 }
 
-/** 用法说明（schedule 图标 + 文本） */
+/** 用法说明（schedule 图标 + 文本；未填写时不渲染，避免占位文案增加视觉噪音） */
 function DosageLine({ med, className = '' }: { med: Medicine; className?: string }) {
+  if (!med.dosage_instruction) return null;
   return (
     <div className={`flex items-center gap-1.5 text-m3-on-surface-variant text-[13px] min-w-0 ${className}`}>
       <Icon name="schedule" className="w-4 h-4 text-m3-primary shrink-0" />
-      <span className="truncate">{med.dosage_instruction || '遵医嘱使用'}</span>
+      <span className="truncate">{med.dosage_instruction}</span>
     </div>
   );
 }
@@ -108,7 +109,7 @@ export const DesktopCard: React.FC<{ med: Medicine } & CardActions> = ({ med, on
             )}
           </div>
           {status.key === 'expired' ? (
-            <span className="text-[11px] text-m3-error font-medium shrink-0">过期药 · 建议清理</span>
+            <span className="text-[11px] text-m3-error font-medium shrink-0">有效期至 {formatExpiryShort(med.expiry_date)}</span>
           ) : status.key === 'low' || status.key === 'out' ? (
             <button
               type="button"

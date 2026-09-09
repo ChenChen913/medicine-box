@@ -10,7 +10,7 @@
 import React, { useMemo } from 'react';
 import { Medicine } from '../../types';
 import { getCategoryWeight } from '../../services/medicineService';
-import { HealthOverview, getCategoryMeta, getStatus } from '../ui';
+import { HealthOverview, getStatus } from '../ui';
 import { Icon, IconName } from '../icons';
 import { DesktopCard, MobileCard, MobileMiniCard } from './MedicineCards';
 
@@ -31,13 +31,7 @@ const METRIC_DEFS: { key: FilterKey; label: string; icon: IconName; iconWrap: st
   { key: 'normal', label: '正常备用', icon: 'check_circle', iconWrap: 'bg-m3-primary-fixed/40 text-m3-primary', valueClass: 'text-m3-primary', footClass: 'text-m3-primary' },
 ];
 
-export const MetricGrid: React.FC<{ o: HealthOverview; categoryCount: number; filter: FilterKey; onFilter: (f: FilterKey) => void }> = ({ o, categoryCount, filter, onFilter }) => {
-  const footText: Record<string, string> = {
-    all: `覆盖 ${categoryCount} 大常备科类`,
-    low: '低于预警阈值 · 建议补货',
-    expired: '避免误服 · 请回收',
-    normal: '库存与效期均达标',
-  };
+export const MetricGrid: React.FC<{ o: HealthOverview; filter: FilterKey; onFilter: (f: FilterKey) => void }> = ({ o, filter, onFilter }) => {
   return (
   <div className="lg:col-span-5 grid grid-cols-2 gap-2.5 md:gap-3">
     {METRIC_DEFS.map(def => {
@@ -48,7 +42,7 @@ export const MetricGrid: React.FC<{ o: HealthOverview; categoryCount: number; fi
           key={def.key}
           type="button"
           onClick={() => onFilter(def.key)}
-          className={`bg-m3-surface-container-lowest rounded-2xl p-4 shadow-[0_4px_20px_-2px_rgba(15,118,110,0.04)] flex flex-col justify-between hover:shadow-md transition-all text-left ${active ? 'ring-2 ring-m3-primary/40' : ''}`}
+          className={`bg-m3-surface-container-lowest rounded-2xl p-4 shadow-[0_4px_20px_-2px_rgba(15,118,110,0.04)] flex flex-col justify-between gap-4 hover:shadow-md transition-all text-left ${active ? 'ring-2 ring-m3-primary/40' : ''}`}
         >
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs text-m3-on-surface-variant font-medium">{def.label}</span>
@@ -56,12 +50,9 @@ export const MetricGrid: React.FC<{ o: HealthOverview; categoryCount: number; fi
               <Icon name={def.icon} className="w-5 h-5" />
             </div>
           </div>
-          <div className="flex items-baseline gap-1.5 mt-3">
-            <span className={`text-[30px] leading-9 font-extrabold tracking-tight ${def.valueClass}`}>{value}</span>
+          <div className="flex items-baseline gap-1.5">
+            <span className={`text-4xl leading-10 font-extrabold tracking-tight ${def.valueClass}`}>{value}</span>
             <span className="text-xs text-m3-on-surface-variant">种</span>
-          </div>
-          <div className={`flex items-center gap-1 text-[11px] mt-1 ${def.footClass} opacity-90`}>
-            <span className="truncate">{footText[def.key]}</span>
           </div>
         </button>
       );
@@ -90,7 +81,6 @@ export const HealthBanner: React.FC<{ o: HealthOverview }> = ({ o }) => {
           <span className="text-xs text-m3-primary font-semibold tracking-wide">家庭健康储药指数 · {o.grade}</span>
         </div>
         <h1 className="text-2xl font-bold text-m3-on-surface tracking-tight leading-snug">{o.headline}</h1>
-        <p className="text-sm text-m3-on-surface-variant leading-relaxed max-w-xl">{o.summary}</p>
       </div>
       <div className="mt-6 pt-4 flex flex-col gap-1.5 relative z-10">
         <div className="flex items-center justify-between text-xs">
@@ -111,37 +101,6 @@ export const HealthBanner: React.FC<{ o: HealthOverview }> = ({ o }) => {
           <span>待处理过期 ({o.expired}种)</span>
         </div>
       </div>
-    </div>
-  );
-};
-
-// ============ 温馨提示条 ============
-
-export const ReminderBar: React.FC<{ o: HealthOverview; onGenerate: () => void }> = ({ o, onGenerate }) => {
-  const tips: string[] = [];
-  if (o.low + o.out > 0) tips.push(`当前 ${o.low + o.out} 种药品库存偏低，建议及时补足`);
-  if (o.expiringSoon > 0) tips.push(`${o.expiringSoon} 种药品将在 30 天内临期，请注意轮换`);
-  if (o.expired > 0) tips.push(`${o.expired} 种已过期药品待清理回收`);
-  const text = tips.length > 0 ? `家庭管家温馨提示：${tips.join('；')}。` : '家庭管家温馨提示：全家药箱储备充裕、效期健康，请保持定期盘点的好习惯。';
-
-  return (
-    <div className="w-full bg-m3-surface-container-lowest rounded-2xl px-4 md:px-5 py-3 shadow-[0_2px_12px_rgba(15,118,110,0.03)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-      <div className="flex items-start sm:items-center gap-2.5 min-w-0">
-        <span className="w-8 h-8 rounded-full bg-m3-tertiary-fixed flex items-center justify-center text-m3-tertiary shrink-0">
-          <Icon name="lightbulb" className="w-[18px] h-[18px]" />
-        </span>
-        <span className="text-[13px] text-m3-on-surface leading-relaxed">
-          <strong className="font-semibold text-m3-tertiary">家庭管家温馨提示：</strong>{text.replace('家庭管家温馨提示：', '')}
-        </span>
-      </div>
-      <button
-        type="button"
-        onClick={onGenerate}
-        className="shrink-0 text-m3-primary hover:text-m3-primary-container text-xs font-semibold flex items-center gap-1 py-1 px-3 rounded-full hover:bg-m3-primary/5 transition-colors"
-      >
-        一键生成采购单
-        <Icon name="arrow_forward" className="w-4 h-4" />
-      </button>
     </div>
   );
 };
@@ -270,7 +229,6 @@ export const CategorySections: React.FC<{ meds: Medicine[] } & CardActions> = ({
   return (
     <div className="flex flex-col gap-6 md:gap-8">
       {grouped.map(([category, list]) => {
-        const meta = getCategoryMeta(category);
         // 外用 / 器械等轻量物资在移动端用双列小卡（设计稿的外伤急救形态）
         const compactMobile = category.includes('外用') || category.includes('器械');
         return (
@@ -281,7 +239,6 @@ export const CategorySections: React.FC<{ meds: Medicine[] } & CardActions> = ({
                 <h2 className="text-base md:text-lg font-bold text-m3-on-surface tracking-tight truncate">{category}</h2>
                 <span className="px-2 py-0.5 rounded-full bg-m3-surface-container-low text-[11px] text-m3-on-surface-variant font-semibold shrink-0">{list.length} 种在库</span>
               </div>
-              <span className="hidden md:block text-[13px] text-m3-on-surface-variant shrink-0">{meta.slogan}</span>
             </div>
 
             {/* 桌面三列大卡 */}
