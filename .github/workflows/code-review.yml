@@ -4,11 +4,11 @@ name: AI Code Review (OpenCodeReview)
 # https://github.com/alibaba/open-code-review
 #
 # 使用前配置（仓库 Settings → Secrets and variables → Actions）：
-#   1. 新增 Secret：OCR_API_PROVIDER（可选，默认 dashscope）
-#      与 OCR_API_KEY（对应 provider 的 API Key，如 DASHSCOPE_API_KEY 的值）
-#   2. 默认仅支持手动触发（workflow_dispatch），不会在无人值守时因缺密钥而报错；
-#      配好密钥后，把下方 `if:` 一行注释掉并取消 pull_request 触发的注释，
-#      即可对每个 PR 自动做 AI 评审，评审意见会以 PR comment 形式贴出。
+#   1. 新增 Secret：OCR_API_KEY（provider 的 API Key；
+#      默认 provider 为 dashscope 通义千问，也可在下方步骤中换 DEEPSEEK_API_KEY 等）
+#   2. 本工作流仅手动触发（Actions → AI Code Review → Run workflow），
+#      配好密钥后选择基准分支运行；未配密钥时手动运行会优雅跳过、不会报错。
+#   3. 若想对每个 PR 自动评审：把下方 pull_request 两行注释打开即可。
 
 on:
   workflow_dispatch:
@@ -32,27 +32,42 @@ jobs:
   review:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: ${{ github.event_name == 'workflow_dispatch' && secrets.OCR_API_KEY != '' }}
+    # 注意：secrets 上下文不能用在 job 级 if（会导致 startup failure），
+    # 密钥检查放在 gate 步骤里做
+    if: github.event_name == 'workflow_dispatch'
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
         with:
           fetch-depth: 0   # OCR 需要 git 历史（merge-base / diff）
 
+      - name: 检查 API 密钥
+        id: gate
+        env:
+          OCR_KEY: ${{ secrets.OCR_API_KEY }}
+        run: |
+          if [ -z "$OCR_KEY" ]; then
+            echo "未配置 OCR_API_KEY secret，跳过评审。配置方法见本文件头部注释。"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: 准备 Node
+        if: steps.gate.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: 安装 OpenCodeReview
+        if: steps.gate.outputs.skip != 'true'
         run: npm install -g @alibaba-group/open-code-review
 
       - name: 运行 AI 代码评审
+        if: steps.gate.outputs.skip != 'true'
         env:
-          # provider 通过密钥名约定：OCR_API_PROVIDER 默认 dashscope（通义千问）
+          # 默认按 dashscope（通义千问）注入；换其它 provider 时同步改下方变量名与 ocr config
           DASHSCOPE_API_KEY: ${{ secrets.OCR_API_KEY }}
-          DEEPSEEK_API_KEY: ${{ secrets.OCR_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OCR_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ocr review --from "origin/${{ github.event.inputs.base_ref || 'main' }}" \
@@ -80,7 +95,7 @@ jobs:
           cat review-summary.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: 上传评审结果
-        if: always()
+        if: always() && steps.gate.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ocr-review-result
