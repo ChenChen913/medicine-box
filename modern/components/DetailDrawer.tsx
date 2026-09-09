@@ -111,7 +111,9 @@ export const DetailDrawer: React.FC<Props> = ({ med, logs, onClose, onConsume, o
             </div>
             <div className="min-w-0">
               <h2 className="text-lg font-bold text-m3-on-surface tracking-tight truncate">{med.name}</h2>
-              <span className="text-xs text-m3-on-surface-variant truncate block">{med.form_type}{med.location ? ` · ${med.location}` : ''}</span>
+              <span className="text-xs text-m3-on-surface-variant truncate block">
+                {med.brand ? `${med.brand} · ` : ''}{med.form_type}{med.location ? ` · ${med.location}` : ''}
+              </span>
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
@@ -192,6 +194,7 @@ export const DetailDrawer: React.FC<Props> = ({ med, logs, onClose, onConsume, o
           <div className="flex flex-col gap-2">
             <span className="text-xs font-semibold text-m3-on-surface">用法用量与须知</span>
             <div className="bg-m3-surface-container-low rounded-xl p-3.5 flex flex-col gap-2 text-m3-on-surface-variant text-[13px] leading-relaxed">
+              {med.brand && <p><strong className="text-m3-on-surface font-semibold">品牌：</strong>{med.brand}</p>}
               {med.dosage_instruction && <p><strong className="text-m3-on-surface font-semibold">服用说明：</strong>{med.dosage_instruction}</p>}
               {med.symptoms_treated && <p><strong className="text-m3-on-surface font-semibold">适应症：</strong>{med.symptoms_treated}</p>}
               <p><strong className="text-m3-on-surface font-semibold">副作用禁忌：</strong>{med.side_effects || '详见说明书'}</p>

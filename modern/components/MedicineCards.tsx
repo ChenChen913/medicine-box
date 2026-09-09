@@ -88,7 +88,7 @@ export const DesktopCard: React.FC<{ med: Medicine } & CardActions> = ({ med, on
       <div className="flex flex-col gap-3">
         <CardHead
           med={med}
-          subtitle={`${med.form_type}${med.location ? ' · ' + med.location : ''}`}
+          subtitle={`${med.form_type}${med.brand ? ' · ' + med.brand : ''}${med.location ? ' · ' + med.location : ''}`}
         />
 
         {med.symptoms_treated && (
@@ -155,7 +155,7 @@ export const MobileCard: React.FC<{ med: Medicine } & CardActions> = ({ med, onR
       tabIndex={0}
       onKeyDown={e => { if (e.key === 'Enter') onOpenDetail(med); }}
     >
-      <CardHead med={med} subtitle={`${med.form_type}${med.symptoms_treated ? ' · ' + med.symptoms_treated.split(',')[0] : ''}`} />
+      <CardHead med={med} subtitle={`${med.form_type}${med.brand ? ' · ' + med.brand : ''}${med.symptoms_treated ? ' · ' + med.symptoms_treated.split(',')[0] : ''}`} />
 
       {/* 库存读数区：三列（当前库存 / 估算可用 / 有效期至） */}
       <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-m3-surface-container-low">

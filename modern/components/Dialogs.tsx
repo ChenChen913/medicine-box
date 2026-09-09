@@ -14,7 +14,7 @@ import React, { useState } from 'react';
 import { FormType, Medicine } from '../../types';
 import {
   MedicineService, todayDateString, localDateString,
-  FORM_UNIT_MAP, isRestockMatch,
+  FORM_UNIT_MAP, isRestockMatch, isSameMedicineIdentity, normBrand,
 } from '../../services/medicineService';
 import { Icon, IconName } from '../icons';
 import { getCategoryMeta } from '../ui';
@@ -206,7 +206,7 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, allMedicines, pendi
   const [form, setForm] = useState<Partial<Medicine>>(
     editing ? { ...editing } : {
       form_type: FormType.TABLET, total_quantity: 1, unit: FORM_UNIT_MAP[FormType.TABLET],
-      category: '感冒药', threshold: 5, daily_usage: 0, usage_frequency_score: 0,
+      category: '感冒药', threshold: 5, daily_usage: 0, usage_frequency_score: 0, brand: '',
     }
   );
   // 图片状态：form.image_url 持有当前图（含历史 data:URL）；imageRemoved 标记用户
@@ -215,12 +215,16 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, allMedicines, pendi
 
   const categoryMeta = getCategoryMeta(form.category || '其他');
 
-  // 新增模式：输入名称与药箱已有药品同名时的实时提示（合并入库 / 独立录入口径与提交后一致）
+  // 新增模式：输入名称与药箱已有药品同名时的实时提示（合并入库 / 独立录入口径与提交后一致，
+  // 合并判定 = 同名 + 同剂型 + 同品牌，与服务层 isSameMedicineIdentity 完全同一实现）
   const trimmedName = (form.name || '').trim();
   const existingMatch = !editing && trimmedName
     ? allMedicines?.find(m => (m.name || '').trim() === trimmedName)
     : undefined;
-  const sameFormMatch = existingMatch && existingMatch.form_type === form.form_type;
+  const sameIdentity = existingMatch
+    ? isSameMedicineIdentity(existingMatch, { name: trimmedName, form_type: form.form_type as FormType, brand: form.brand })
+    : false;
+  const sameFormDiffBrand = existingMatch && !sameIdentity && existingMatch.form_type === form.form_type;
   // 新增模式：待补货清单中是否有能被本次入库自动核销的提醒（与提交时服务层同一套匹配规则）
   const matchedRestocks = !editing && trimmedName && pendingRestockNames && pendingRestockNames.length > 0
     ? pendingRestockNames.filter(n => isRestockMatch(n, { name: trimmedName, form_type: form.form_type as FormType }, allMedicines ?? []))
@@ -263,6 +267,8 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, allMedicines, pendi
 
     const common = {
       name: form.name || '未命名',
+      // 品牌（可选）：trim 后空值统一存 undefined，保证同名无品牌药品能正确合并/匹配
+      brand: normBrand(form.brand) || undefined,
       category: form.category || '其他',
       location: form.location || '未知',
       total_quantity: Number(form.total_quantity) || 0,
@@ -293,8 +299,8 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, allMedicines, pendi
     } else {
       const { merged, offsetRestocks } = await MedicineService.addMedicine({ ...common, id: Date.now().toString(), usage_frequency_score: 0 });
       const parts: string[] = merged
-        ? [`「${common.name}」已在药箱中（同名同剂型），已合并入库：库存与效期以本次填写为准`]
-        : [`新药品「${common.name}」已入库，药箱概览已更新`];
+        ? [`「${common.name}」${common.brand ? `（${common.brand}）` : ''}已在药箱中（同名同剂型同品牌），已合并入库：库存与效期以本次填写为准`]
+        : [`新药品「${common.name}」${common.brand ? `（${common.brand}）` : ''}已入库，药箱概览已更新`];
       if (offsetRestocks.length > 0) parts.push(`已自动核销待补货提醒：${offsetRestocks.join('、')}`);
       onDone(common.name, parts.join('；'));
     }
@@ -352,17 +358,30 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, allMedicines, pendi
           <input required type="text" className={inputCls} value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="如：布洛芬缓释胶囊" />
         </label>
 
+        <label className="flex flex-col gap-1.5">
+          <span className={labelCls}>品牌（可选）</span>
+          <input type="text" className={inputCls} value={form.brand || ''} onChange={e => setForm({ ...form, brand: e.target.value })} placeholder="如：999、仁和、拜耳；不填则不区分品牌" />
+        </label>
+
         {/* 同名 / 待补货匹配实时提示：口径与服务层提交后的实际行为完全一致 */}
-        {existingMatch && sameFormMatch && (
+        {existingMatch && sameIdentity && (
           <div className="rounded-xl p-3 bg-m3-primary/10 text-m3-on-surface text-[12px] leading-relaxed flex items-start gap-2" role="status">
             <Icon name="sync" className="w-4 h-4 text-m3-primary shrink-0 mt-0.5" />
             <span>
-              药箱中已有 <b className="font-semibold">{existingMatch.name}</b>（{existingMatch.form_type} · 剩余 {existingMatch.total_quantity}{existingMatch.unit}{existingMatch.location ? ` · ${existingMatch.location}` : ''}）。
+              药箱中已有 <b className="font-semibold">{existingMatch.name}</b>{normBrand(existingMatch.brand) ? `（${normBrand(existingMatch.brand)}）` : ''}（{existingMatch.form_type} · 剩余 {existingMatch.total_quantity}{existingMatch.unit}{existingMatch.location ? ` · ${existingMatch.location}` : ''}）。
               确认入库后将与它合并：<b className="font-semibold">库存、效期等信息以本次填写为准</b>，其待补货提醒也会自动核销。
             </span>
           </div>
         )}
-        {existingMatch && !sameFormMatch && (
+        {sameFormDiffBrand && (
+          <div className="rounded-xl p-3 bg-m3-tertiary-fixed/60 text-m3-on-surface text-[12px] leading-relaxed flex items-start gap-2" role="status">
+            <Icon name="info" className="w-4 h-4 text-m3-tertiary-container shrink-0 mt-0.5" />
+            <span>
+              药箱中已有「{existingMatch.name}」{normBrand(existingMatch.brand) ? `（${normBrand(existingMatch.brand)}）` : ''}。本次填写的品牌不同，将作为<b className="font-semibold">独立条目</b>录入，两种品牌的用药记录会<b className="font-semibold">分开统计</b>；若想给已有品牌补货，建议在详情中直接编辑该药品增加库存。
+            </span>
+          </div>
+        )}
+        {existingMatch && !sameIdentity && !sameFormDiffBrand && (
           <div className="rounded-xl p-3 bg-m3-tertiary-fixed/60 text-m3-on-surface text-[12px] leading-relaxed flex items-start gap-2" role="status">
             <Icon name="info" className="w-4 h-4 text-m3-tertiary-container shrink-0 mt-0.5" />
             <span>

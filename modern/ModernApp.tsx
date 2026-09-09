@@ -18,6 +18,7 @@ import UISwitcher from '../ui/UISwitcher';
 import { useToasts, ToastStack } from './components/Toast';
 import { DetailDrawer } from './components/DetailDrawer';
 import { ConsumeDialog, DeleteDialog, MedicineForm } from './components/Dialogs';
+import { DataBackupDialog } from './components/DataBackup';
 import { RestockView, LogsView } from './components/Views';
 import {
   SearchFilter, CategorySections, MobileHealthCard,
@@ -49,12 +50,15 @@ const ModernApp: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<Medicine | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Medicine | null>(null);
+  const [backupOpen, setBackupOpen] = useState(false);
 
   // ---- 数据加载 ----
   const refreshData = useCallback(async () => {
     try {
-      const [meds, shop, lg] = await Promise.all([
-        MedicineService.getMedicines(),
+      // getMedicines 必须先行：首次播种 / 演示迁移（含品牌用药记录）在它内部写回，
+      // 若与清单/记录并行读取，新装设备首屏会读到播种前的空数据（竞态）
+      const meds = await MedicineService.getMedicines();
+      const [shop, lg] = await Promise.all([
         MedicineService.getShoppingList(),
         MedicineService.getUsageLogs(),
       ]);
@@ -166,7 +170,7 @@ const ModernApp: React.FC = () => {
 
   const navBadge = shopping.length;
   // 任一弹层打开时隐藏右下角 UI 切换按钮，避免遮挡抽屉/弹窗的操作区
-  const overlayOpen = !!(drawerMed || consumeTarget || deleteTarget || formOpen);
+  const overlayOpen = !!(drawerMed || consumeTarget || deleteTarget || formOpen || backupOpen);
 
   const switchView = (v: ViewKey) => {
     setView(v);
@@ -234,33 +238,54 @@ const ModernApp: React.FC = () => {
           <nav className="hidden md:flex items-center p-1 rounded-full bg-m3-surface-container-low">
             {navItems.map(item => <NavPill key={item.key} item={item} />)}
           </nav>
-          <button
-            type="button"
-            onClick={openAdd}
-            className="flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-m3-primary hover:bg-m3-primary-container text-m3-on-primary text-sm font-semibold shadow-[0_6px_16px_-2px_rgba(15,118,110,0.3)] hover:shadow-[0_8px_20px_-2px_rgba(15,118,110,0.38)] active:scale-[0.98] transition-all"
-          >
-            <Icon name="add" className="w-[18px] h-[18px]" />
-            <span>入库新药</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setBackupOpen(true)}
+              aria-label="数据备份与恢复"
+              title="数据备份与恢复"
+              className="w-10 h-10 rounded-full border border-m3-outline-variant/70 text-m3-on-surface-variant hover:text-m3-primary hover:border-m3-primary/50 flex items-center justify-center transition-colors"
+            >
+              <Icon name="archive" className="w-[18px] h-[18px]" />
+            </button>
+            <button
+              type="button"
+              onClick={openAdd}
+              className="flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-m3-primary hover:bg-m3-primary-container text-m3-on-primary text-sm font-semibold shadow-[0_6px_16px_-2px_rgba(15,118,110,0.3)] hover:shadow-[0_8px_20px_-2px_rgba(15,118,110,0.38)] active:scale-[0.98] transition-all"
+            >
+              <Icon name="add" className="w-[18px] h-[18px]" />
+              <span>入库新药</span>
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* 移动端头部（流内）：左 Logo，右「用药记录」入口（入库走底部中央 FAB） */}
-      <header className="md:hidden px-4 pt-4 pb-1 flex items-center justify-between gap-3">
+      {/* 移动端头部（流内）：左 Logo，右用药记录 + 数据备份入口（入库走底部中央 FAB） */}
+      <header className="md:hidden px-4 pt-4 pb-1 flex items-center justify-between gap-2">
         {Logo}
-        <button
-          type="button"
-          onClick={() => switchView('logs')}
-          aria-current={view === 'logs' ? 'page' : undefined}
-          className={`flex items-center gap-1 px-3.5 py-2 rounded-full text-xs font-semibold active:scale-95 transition-all shrink-0 ${
-            view === 'logs'
-              ? 'bg-m3-primary text-m3-on-primary shadow-[0_4px_12px_rgba(15,118,110,0.3)]'
-              : 'bg-m3-surface-container-lowest text-m3-on-surface-variant shadow-[0_2px_8px_rgba(15,118,110,0.05)]'
-          }`}
-        >
-          <Icon name="history" className="w-4 h-4" />
-          <span>用药记录</span>
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => switchView('logs')}
+            aria-current={view === 'logs' ? 'page' : undefined}
+            className={`flex items-center gap-1 px-3.5 py-2 rounded-full text-xs font-semibold active:scale-95 transition-all ${
+              view === 'logs'
+                ? 'bg-m3-primary text-m3-on-primary shadow-[0_4px_12px_rgba(15,118,110,0.3)]'
+                : 'bg-m3-surface-container-lowest text-m3-on-surface-variant shadow-[0_2px_8px_rgba(15,118,110,0.05)]'
+            }`}
+          >
+            <Icon name="history" className="w-4 h-4" />
+            <span>用药记录</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setBackupOpen(true)}
+            aria-label="数据备份与恢复"
+            className="w-9 h-9 rounded-full bg-m3-surface-container-lowest text-m3-on-surface-variant shadow-[0_2px_8px_rgba(15,118,110,0.05)] flex items-center justify-center active:scale-95 transition-all"
+          >
+            <Icon name="archive" className="w-[17px] h-[17px]" />
+          </button>
+        </div>
       </header>
 
       {/* 主内容 */}
@@ -382,6 +407,18 @@ const ModernApp: React.FC = () => {
             showToast(
               message || (wasEditing ? `「${name}」的信息已更新` : `新药品「${name}」已入库，药箱概览已更新`)
             );
+            refreshData();
+          }}
+        />
+      )}
+
+      {/* 数据备份与恢复（导出/导入，新版 UI 入口：桌面顶栏 + 移动头部） */}
+      {backupOpen && (
+        <DataBackupDialog
+          onClose={() => setBackupOpen(false)}
+          onDone={message => {
+            setBackupOpen(false);
+            showToast(message);
             refreshData();
           }}
         />

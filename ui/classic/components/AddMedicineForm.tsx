@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { FormType, Medicine } from '../../../types';
-import { MedicineService, todayDateString } from '../../../services/medicineService';
+import { MedicineService, todayDateString, normBrand } from '../../../services/medicineService';
 
 interface Props {
   onClose: () => void;
@@ -84,6 +84,8 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess, editingMed }) =>
     // 公共字段：新建与编辑共用；编辑时未填的字段回落到原值
     const common = {
       name: formData.name || '未命名',
+      // 品牌（可选）：trim 后空值统一存 undefined，保证同名无品牌药品能正确合并/匹配
+      brand: normBrand(formData.brand) || undefined,
       category: formData.category || '其他',
       location: formData.location || '未知',
       // Number() 兜底避免 NaN 入库；允许小数（与数据库 double precision 一致，如 0.5 瓶）
@@ -163,6 +165,12 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess, editingMed }) =>
                 {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>品牌 (可选)</label>
+            <input type="text" className={inputClass}
+              value={formData.brand || ''} onChange={e => setFormData({...formData, brand: e.target.value})} placeholder="如: 999、仁和、拜耳；不填则不区分品牌" />
           </div>
 
           <div className="grid grid-cols-2 gap-5">

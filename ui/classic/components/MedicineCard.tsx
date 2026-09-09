@@ -125,7 +125,7 @@ const MedicineCard: React.FC<Props> = ({ medicine, onConsume, onDetail }) => {
             <div className="flex justify-between items-start">
               <h3 className="font-bold text-slate-800 text-xl leading-tight line-clamp-2 mb-1.5">{medicine.name}</h3>
             </div>
-            <p className="text-sm text-slate-500 font-medium mb-2">{medicine.form_type} · {medicine.location}</p>
+            <p className="text-sm text-slate-500 font-medium mb-2">{medicine.form_type}{medicine.brand ? ` · ${medicine.brand}` : ''} · {medicine.location}</p>
             
             <div className="text-xs text-slate-600 bg-white/50 p-2 rounded-lg line-clamp-2 leading-relaxed border border-slate-100/50">
               <span className="font-bold text-slate-700">主治: </span>{medicine.symptoms_treated}

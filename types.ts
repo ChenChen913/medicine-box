@@ -27,6 +27,7 @@ export enum ShoppingStatus {
 export interface Medicine {
   id: string;
   name: string; // 药名
+  brand?: string; // 药品品牌（可选）：同名药不同品牌可分条管理、分开记录用药
   image_url?: string; // 图片URL
   form_type: FormType; // 剂型
   category: string; // 分类 (感冒药, 止痛药等)
@@ -48,6 +49,7 @@ export interface UsageLog {
   id: string;
   medicine_id: string;
   medicine_name: string;
+  brand?: string; // 打卡时药品品牌快照：同名药不同品牌的用量可分别统计
   amount: number;
   log_time: string;
   user?: string;

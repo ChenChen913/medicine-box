@@ -170,7 +170,16 @@ export const LogsView: React.FC<{ logs: UsageLog[]; loading: boolean }> = ({ log
                       <div className="w-8 h-8 rounded-full bg-m3-primary/10 text-m3-primary flex items-center justify-center shrink-0">
                         <Icon name="check" className="w-4 h-4" />
                       </div>
-                      <span className="text-sm font-medium text-m3-on-surface truncate">{log.medicine_name}</span>
+                      <div className="min-w-0">
+                        <span className="text-sm font-medium text-m3-on-surface truncate block">{log.medicine_name}</span>
+                        {/* 品牌快照徽标：同名药不同品牌的用量在此分明 */}
+                        {log.brand && (
+                          <span className="inline-flex items-center gap-0.5 mt-0.5 px-1.5 py-px rounded-full bg-m3-secondary-fixed/50 text-m3-on-secondary-container text-[10px] font-semibold max-w-full">
+                            <Icon name="medication" className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{log.brand}</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="text-right shrink-0">
                       <div className="text-sm font-semibold text-m3-primary">−{log.amount}</div>

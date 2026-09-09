@@ -221,7 +221,7 @@ export const SearchFilter: React.FC<{
                   <Icon name={meta.icon} className="w-[18px] h-[18px]" />
                 </span>
                 <span className="flex-1 min-w-0">
-                  <span className="block text-sm font-medium text-m3-on-surface truncate">{m.name}</span>
+                  <span className="block text-sm font-medium text-m3-on-surface truncate">{m.name}{m.brand ? `（${m.brand}）` : ''}</span>
                   <span className="block text-[11px] text-m3-on-surface-variant truncate mt-0.5">
                     {m.category}{m.symptoms_treated ? ` · ${m.symptoms_treated}` : ''}
                   </span>
@@ -380,7 +380,7 @@ export const MobileHealthCard: React.FC<{ o: HealthOverview; filter: FilterKey; 
   return (
     <div className="p-4 rounded-2xl bg-m3-surface-container-lowest shadow-[0_4px_20px_-2px_rgba(15,118,110,0.06)] flex flex-col gap-3">
       <div className="flex flex-col">
-        <span className="text-base font-semibold text-m3-on-surface">家庭药箱状态 · {o.grade}</span>
+        <span className="text-base font-semibold text-m3-on-surface">药箱状态 · {o.grade}</span>
         <span className="text-xs text-m3-on-surface-variant mt-0.5">{o.headline}</span>
       </div>
 

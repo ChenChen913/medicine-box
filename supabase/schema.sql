@@ -8,6 +8,7 @@
 create table if not exists public.medicines (
   id                     text primary key,
   name                   text not null,
+  brand                  text,
   image_url              text,
   form_type              text,
   category               text,
@@ -39,12 +40,17 @@ create table if not exists public.usage_logs (
   id             text primary key,
   medicine_id    text,
   medicine_name  text,
+  brand          text,
   amount         double precision default 0,
   log_time       timestamptz default now(),
   user_name      text
 );
 
 create index if not exists usage_logs_log_time_idx on public.usage_logs (log_time desc);
+
+-- ---------- 3.1 已有库的增量列（幂等）：品牌字段 ----------
+alter table public.medicines  add column if not exists brand text;
+alter table public.usage_logs add column if not exists brand text;
 
 -- ============================================================================
 -- 4. 行级安全策略 (RLS)

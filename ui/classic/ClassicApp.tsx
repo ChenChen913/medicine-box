@@ -11,6 +11,7 @@ import { MedicineService, todayDateString, getCategoryWeight } from '../../servi
 import MedicineCard from './components/MedicineCard';
 import ShoppingList from './components/ShoppingList';
 import AddMedicineForm from './components/AddMedicineForm';
+import { DataBackupDialog } from '../../modern/components/DataBackup';
 import UISwitcher from '../UISwitcher';
 
 // --- 图标组件 ---
@@ -38,6 +39,8 @@ function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
   // 存储写入失败提示（localStorage 配额不足 / 云端写入失败），由服务层广播事件触发
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
+  // 数据备份与恢复弹窗（与新版 UI 同一组件）
+  const [backupOpen, setBackupOpen] = useState(false);
 
   // 异步加载数据
   const refreshData = async () => {
@@ -198,11 +201,22 @@ function App() {
              <button onClick={() => setActiveTab('cart')} className={`px-6 py-2.5 rounded-xl font-bold transition-colors ${activeTab === 'cart' ? 'bg-emerald-50 text-emerald-600' : 'text-slate-500 hover:text-slate-800'}`}>需补货</button>
           </div>
           
-          <button 
-            onClick={() => { setEditingMed(null); setShowAddForm(true); }}
-            className="hidden md:flex bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-700 transition-colors items-center gap-2 shadow-md">
-            <span>+ 入库新药</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* 数据备份与恢复：与新版 UI 同一功能（header 桌面端常显，移动端在 header 右侧） */}
+            <button 
+              onClick={() => setBackupOpen(true)}
+              aria-label="数据备份与恢复"
+              title="数据备份与恢复"
+              className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:text-emerald-600 hover:border-emerald-300 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 7h14M5 7a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2m-7 3l3 3m0 0l-3 3m3-3H9" /></svg>
+            </button>
+            <button 
+              onClick={() => { setEditingMed(null); setShowAddForm(true); }}
+              className="hidden md:flex bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-700 transition-colors items-center gap-2 shadow-md">
+              <span>+ 入库新药</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -341,11 +355,24 @@ function App() {
                )}
                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6 pt-16">
                  <h2 className="text-2xl font-bold text-white leading-tight">{selectedMed.name}</h2>
-                 <p className="text-white/80 text-sm mt-1">{selectedMed.form_type} · {selectedMed.category}</p>
+                 <p className="text-white/80 text-sm mt-1">{selectedMed.brand ? `${selectedMed.brand} · ` : ''}{selectedMed.form_type} · {selectedMed.category}</p>
                </div>
             </div>
 
             <div className="p-6 space-y-6">
+              {selectedMed.brand && (
+                <div className="grid grid-cols-2 gap-4">
+                   <div className="bg-slate-50 p-3 rounded-xl">
+                     <span className="text-xs text-slate-400 block mb-1">药品品牌</span>
+                     <span className="font-semibold text-slate-800">{selectedMed.brand}</span>
+                   </div>
+                   <div className="bg-slate-50 p-3 rounded-xl">
+                     <span className="text-xs text-slate-400 block mb-1">存放位置</span>
+                     <span className="font-semibold text-slate-800">{selectedMed.location}</span>
+                   </div>
+                </div>
+              )}
+              {!selectedMed.brand && (
               <div className="grid grid-cols-2 gap-4">
                  <div className="bg-slate-50 p-3 rounded-xl">
                    <span className="text-xs text-slate-400 block mb-1">存放位置</span>
@@ -356,6 +383,7 @@ function App() {
                    <span className="font-semibold text-emerald-600 text-lg">{selectedMed.total_quantity} {selectedMed.unit}</span>
                  </div>
               </div>
+              )}
 
               <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
                 <h4 className="text-sm font-bold text-emerald-800 uppercase mb-2 flex items-center gap-2">
@@ -467,6 +495,18 @@ function App() {
           editingMed={editingMed ?? undefined} 
           onClose={() => { setShowAddForm(false); setEditingMed(null); }} 
           onSuccess={() => { setShowAddForm(false); setEditingMed(null); refreshData(); }} 
+        />
+      )}
+
+      {/* 数据备份与恢复（导出/导入；与新版 UI 同一组件，功能保持同步） */}
+      {backupOpen && (
+        <DataBackupDialog
+          onClose={() => setBackupOpen(false)}
+          onDone={message => {
+            setBackupOpen(false);
+            setStorageWarning(message);
+            refreshData();
+          }}
         />
       )}
     </div>

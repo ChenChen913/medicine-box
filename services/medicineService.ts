@@ -23,10 +23,12 @@ function daysFromNow(days: number): string {
 }
 
 // --- 首次使用时预置的示例数据 ---
+// brand：品牌字段演示（同名药不同品牌可分条管理）
 const INITIAL_MEDICINES: Medicine[] = [
   {
     id: '1',
     name: '布洛芬缓释胶囊 (芬必得)',
+    brand: '芬必得',
     form_type: FormType.CAPSULE,
     category: '止痛药',
     location: '客厅医药箱第一层',
@@ -44,6 +46,7 @@ const INITIAL_MEDICINES: Medicine[] = [
   {
     id: '2',
     name: '感冒灵颗粒',
+    brand: '999',
     form_type: FormType.GRANULE,
     category: '感冒药',
     location: '客厅医药箱第二层',
@@ -61,6 +64,7 @@ const INITIAL_MEDICINES: Medicine[] = [
   {
     id: '3',
     name: '阿莫西林胶囊',
+    brand: '华北制药',
     form_type: FormType.CAPSULE,
     category: '抗生素',
     location: '主卧抽屉',
@@ -78,6 +82,7 @@ const INITIAL_MEDICINES: Medicine[] = [
   {
     id: '4',
     name: '蒙脱石散 (思密达)',
+    brand: '思密达',
     form_type: FormType.GRANULE,
     category: '肠胃药',
     location: '客厅医药箱',
@@ -129,6 +134,7 @@ const INITIAL_MEDICINES: Medicine[] = [
   {
     id: '7',
     name: '维生素C泡腾片',
+    brand: '力度伸',
     form_type: FormType.TABLET,
     category: '保健品',
     location: '厨房柜子',
@@ -146,6 +152,7 @@ const INITIAL_MEDICINES: Medicine[] = [
   {
     id: '8',
     name: '氯雷他定片 (开瑞坦)',
+    brand: '开瑞坦',
     form_type: FormType.TABLET,
     category: '抗过敏',
     location: '卧室抽屉',
@@ -164,6 +171,7 @@ const INITIAL_MEDICINES: Medicine[] = [
   {
     id: '9',
     name: '藿香正气水',
+    brand: '太极',
     form_type: FormType.LIQUID,
     category: '肠胃药',
     location: '客厅医药箱',
@@ -195,15 +203,15 @@ const INITIAL_MEDICINES: Medicine[] = [
     side_effects: '偶见眼部刺痛。',
     usage_frequency_score: 50
   },
-  { id: '11', name: '健胃消食片', category: '肠胃药', form_type: FormType.TABLET, location: '餐厅', total_quantity: 32, unit: '片', threshold: 10, expiry_date: '2027-10-01', last_purchase_date: '2023-11-11', symptoms_treated: '消化不良', dosage_instruction: '每日3次，每次3片', daily_usage: 9, side_effects: '无', usage_frequency_score: 10 },
+  { id: '11', name: '健胃消食片', brand: '江中', category: '肠胃药', form_type: FormType.TABLET, location: '餐厅', total_quantity: 32, unit: '片', threshold: 10, expiry_date: '2027-10-01', last_purchase_date: '2023-11-11', symptoms_treated: '消化不良', dosage_instruction: '每日3次，每次3片', daily_usage: 9, side_effects: '无', usage_frequency_score: 10 },
   { id: '12', name: '云南白药喷雾', category: '外用药', form_type: FormType.SPRAY, location: '运动包', total_quantity: 1, unit: '瓶', threshold: 1, expiry_date: daysFromNow(25), last_purchase_date: '2023-12-01', symptoms_treated: '跌打损伤', dosage_instruction: '每日3-5次，喷患处', daily_usage: 0.2, side_effects: '皮肤过敏', usage_frequency_score: 6 },
-  { id: '13', name: '奥美拉唑肠溶胶囊', category: '肠胃药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 14, unit: '粒', threshold: 7, expiry_date: '2028-02-01', last_purchase_date: '2023-08-01', symptoms_treated: '胃酸过多', dosage_instruction: '每日1次，每次1粒', daily_usage: 1, side_effects: '口干', usage_frequency_score: 9 },
-  { id: '14', name: '连花清瘟胶囊', category: '感冒药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 48, unit: '粒', threshold: 24, expiry_date: '2027-09-09', last_purchase_date: '2022-12-01', symptoms_treated: '流感', dosage_instruction: '每日3次，每次4粒', daily_usage: 12, side_effects: '胃部不适', usage_frequency_score: 40 },
+  { id: '13', name: '奥美拉唑肠溶胶囊', brand: '阿斯利康', category: '肠胃药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 14, unit: '粒', threshold: 7, expiry_date: '2028-02-01', last_purchase_date: '2023-08-01', symptoms_treated: '胃酸过多', dosage_instruction: '每日1次，每次1粒', daily_usage: 1, side_effects: '口干', usage_frequency_score: 9 },
+  { id: '14', name: '连花清瘟胶囊', brand: '以岭', category: '感冒药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 48, unit: '粒', threshold: 24, expiry_date: '2027-09-09', last_purchase_date: '2022-12-01', symptoms_treated: '流感', dosage_instruction: '每日3次，每次4粒', daily_usage: 12, side_effects: '胃部不适', usage_frequency_score: 40 },
   { id: '15', name: '红霉素软膏', category: '外用药', form_type: FormType.TOPICAL, location: '床头柜', total_quantity: 1, unit: '支', threshold: 1, expiry_date: '2027-01-01', last_purchase_date: '2023-01-01', symptoms_treated: '皮肤感染', dosage_instruction: '每日2次，涂抹患处', daily_usage: 0.1, side_effects: '偶见刺激', usage_frequency_score: 3 },
-  { id: '16', name: '褪黑素', category: '保健品', form_type: FormType.TABLET, location: '床头柜', total_quantity: 60, unit: '粒', threshold: 10, expiry_date: '2028-05-05', last_purchase_date: '2023-10-10', symptoms_treated: '失眠', dosage_instruction: '睡前1粒', daily_usage: 1, side_effects: '白天嗜睡', usage_frequency_score: 100 },
+  { id: '16', name: '褪黑素', brand: '汤臣倍健', category: '保健品', form_type: FormType.TABLET, location: '床头柜', total_quantity: 60, unit: '粒', threshold: 10, expiry_date: '2028-05-05', last_purchase_date: '2023-10-10', symptoms_treated: '失眠', dosage_instruction: '睡前1粒', daily_usage: 1, side_effects: '白天嗜睡', usage_frequency_score: 100 },
   { id: '17', name: '诺氟沙星胶囊', category: '肠胃药', form_type: FormType.CAPSULE, location: '药箱', total_quantity: 20, unit: '粒', threshold: 6, expiry_date: '2019-01-01', last_purchase_date: '2018-01-01', symptoms_treated: '细菌性痢疾', dosage_instruction: '每日2次，每次2粒', daily_usage: 4, side_effects: '软骨损害', usage_frequency_score: 0 },
-  { id: '18', name: '阿司匹林肠溶片', category: '心脑血管', form_type: FormType.TABLET, location: '老人房', total_quantity: 100, unit: '片', threshold: 30, expiry_date: '2028-03-03', last_purchase_date: '2023-11-01', symptoms_treated: '血栓预防', dosage_instruction: '每日1次，每次1片', daily_usage: 1, side_effects: '出血倾向', usage_frequency_score: 90 },
-  { id: '19', name: '金嗓子喉片', category: '咽喉', form_type: FormType.TABLET, location: '包里', total_quantity: 5, unit: '片', threshold: 5, expiry_date: daysFromNow(12), last_purchase_date: '2023-09-09', symptoms_treated: '咽喉肿痛', dosage_instruction: '含服，每小时1-2片', daily_usage: 3, side_effects: '无', usage_frequency_score: 18 },
+  { id: '18', name: '阿司匹林肠溶片', brand: '拜耳', category: '心脑血管', form_type: FormType.TABLET, location: '老人房', total_quantity: 100, unit: '片', threshold: 30, expiry_date: '2028-03-03', last_purchase_date: '2023-11-01', symptoms_treated: '血栓预防', dosage_instruction: '每日1次，每次1片', daily_usage: 1, side_effects: '出血倾向', usage_frequency_score: 90 },
+  { id: '19', name: '金嗓子喉片', brand: '金嗓子', category: '咽喉', form_type: FormType.TABLET, location: '包里', total_quantity: 5, unit: '片', threshold: 5, expiry_date: daysFromNow(12), last_purchase_date: '2023-09-09', symptoms_treated: '咽喉肿痛', dosage_instruction: '含服，每小时1-2片', daily_usage: 3, side_effects: '无', usage_frequency_score: 18 },
   { id: '20', name: '风油精', category: '外用药', form_type: FormType.LIQUID, location: '客厅茶几', total_quantity: 2, unit: '瓶', threshold: 1, expiry_date: '2028-10-10', last_purchase_date: '2021-10-10', symptoms_treated: '蚊虫叮咬', dosage_instruction: '适量涂抹', daily_usage: 0.1, side_effects: '刺激眼睛', usage_frequency_score: 11 },
 ];
 
@@ -344,6 +352,154 @@ function settleMatchingRestocks(data: DBStructure, med: Medicine): string[] {
 }
 
 // ==========================================================
+// 品牌字段：规范化 + 演示数据迁移（老用户也能看到品牌与分品牌用药记录）
+// ==========================================================
+
+/** 品牌规范化：trim；未设置（undefined / 空白）统一为 ''，用于比较与入库 */
+export function normBrand(b?: string): string {
+  return (b || '').trim();
+}
+
+/**
+ * 同名药入库时是否视为「同一条药品」（合并入库的判定，与表单实时提示口径一致）：
+ * 名称 trim 相等 + 剂型相同 + 品牌规范化后相同。
+ * 品牌不同 → 独立条目，可分开记录用药（用户需求：同一药吃两三个牌子分别记账）。
+ */
+export function isSameMedicineIdentity(
+  a: Pick<Medicine, 'name' | 'form_type' | 'brand'>,
+  b: Pick<Medicine, 'name' | 'form_type' | 'brand'>
+): boolean {
+  return (
+    (a.name || '').trim() === (b.name || '').trim() &&
+    a.form_type === b.form_type &&
+    normBrand(a.brand) === normBrand(b.brand)
+  );
+}
+
+/**
+ * 品牌演示迁移（一次性，幂等）：
+ *  1. 给「id+name 与种子一致且从未填过品牌」的老药品补上演示品牌
+ *     （用户自建、改过名或填过品牌的条目一律不动）；
+ *  2. 追加一条同名不同品牌的「阿莫西林胶囊 · 珠海联邦」，演示同名药分品牌管理；
+ *  3. 为两个品牌的阿莫西林播种近两周的分品牌用药记录，
+ *     让「用药记录按品牌区分」开箱即可看到效果。
+ *  仅在 localStorage 可读的设备执行一次（flag 封口）；各子步骤自带条件幂等，
+ *  即使 flag 丢失（清浏览器数据）也不会重复插入（同名同品牌存在即跳过）。
+ */
+const BRAND_SEED_FLAG = 'smart-medicine-box:brand-seed:v1';
+
+/** 老种子药品的演示品牌（id+name 双重匹配才生效） */
+const SEED_BRANDS: Record<string, { name: string; brand: string }> = {
+  '1': { name: '布洛芬缓释胶囊 (芬必得)', brand: '芬必得' },
+  '2': { name: '感冒灵颗粒', brand: '999' },
+  '3': { name: '阿莫西林胶囊', brand: '华北制药' },
+  '4': { name: '蒙脱石散 (思密达)', brand: '思密达' },
+  '7': { name: '维生素C泡腾片', brand: '力度伸' },
+  '8': { name: '氯雷他定片 (开瑞坦)', brand: '开瑞坦' },
+  '9': { name: '藿香正气水', brand: '太极' },
+  '11': { name: '健胃消食片', brand: '江中' },
+  '13': { name: '奥美拉唑肠溶胶囊', brand: '阿斯利康' },
+  '14': { name: '连花清瘟胶囊', brand: '以岭' },
+  '16': { name: '褪黑素', brand: '汤臣倍健' },
+  '18': { name: '阿司匹林肠溶片', brand: '拜耳' },
+  '19': { name: '金嗓子喉片', brand: '金嗓子' },
+};
+
+/** 生成 N 天前某时刻的 ISO 时间戳（模拟打卡时间用，本地时区） */
+function daysAgoIso(days: number, hour: number, minute: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  d.setHours(hour, minute, 0, 0);
+  return d.toISOString();
+}
+
+function seedBrandDemo(data: DBStructure): boolean {
+  try {
+    if (localStorage.getItem(BRAND_SEED_FLAG)) return false;
+  } catch {
+    // localStorage 不可用（隐私模式等）：跳过演示迁移，避免每次加载都尝试
+    return false;
+  }
+
+  let changed = false;
+
+  // 1) 老种子药品补品牌（id+name 一致且从未设置过品牌才补）
+  data.medicines.forEach(med => {
+    const seed = SEED_BRANDS[String(med.id)];
+    if (!seed || seed.name !== med.name) return;
+    if (normBrand(med.brand) !== '') return; // 用户已填过品牌，不动
+    med.brand = seed.brand;
+    changed = true;
+  });
+
+  // 2) 追加同名不同品牌的阿莫西林（仅当 id 与「同名+同品牌」都不存在时）
+  const amoxA = data.medicines.find(m => String(m.id) === '3' && m.name === '阿莫西林胶囊');
+  const amoxBId = 'seed-amox-b';
+  const hasAmoxB =
+    data.medicines.some(m => String(m.id) === amoxBId) ||
+    data.medicines.some(m => isSameMedicineIdentity(m, { name: '阿莫西林胶囊', form_type: FormType.CAPSULE, brand: '珠海联邦' }));
+  let amoxB: Medicine | undefined;
+  if (!hasAmoxB) {
+    amoxB = {
+      id: amoxBId,
+      name: '阿莫西林胶囊',
+      brand: '珠海联邦',
+      form_type: FormType.CAPSULE,
+      category: '抗生素',
+      location: '客厅医药箱第二层',
+      total_quantity: 16,
+      unit: '粒',
+      threshold: 8,
+      expiry_date: daysFromNow(180),
+      last_purchase_date: daysFromNow(-9),
+      symptoms_treated: '呼吸道感染, 泌尿道感染',
+      dosage_instruction: '每日3次，每次2粒',
+      daily_usage: 6,
+      side_effects: '恶心、呕吐、腹泻及假膜性肠炎等胃肠道反应。',
+      usage_frequency_score: 3,
+    };
+    data.medicines.push(amoxB);
+    changed = true;
+  }
+
+  // 3) 播种分品牌用药记录（logs 里没有 seed-log- 前缀的演示记录时才播种；
+  //    品牌条目必须真实存在于药箱，避免产生指向已删药品的孤儿记录）
+  const hasSeedLogs = data.logs.some(l => String(l.id).startsWith('seed-log-'));
+  if (!hasSeedLogs) {
+    const seedLogs: UsageLog[] = [];
+    const pushLogs = (med: Medicine | undefined, dayOffsets: number[], tag: string) => {
+      if (!med) return;
+      const times = [8 * 60 + 10, 12 * 60 + 30, 19 * 60 + 20]; // 早/中/晚三个打卡时点
+      dayOffsets.forEach((d, i) => {
+        const t = times[i % times.length];
+        seedLogs.push({
+          id: `seed-log-${tag}${i + 1}`,
+          medicine_id: String(med.id),
+          medicine_name: med.name,
+          brand: med.brand,
+          amount: 2,
+          log_time: daysAgoIso(d, Math.floor(t / 60), t % 60),
+        });
+      });
+    };
+    // 华北制药：14 天内 8 次；珠海联邦：9 天内 5 次 → 用药记录里两个品牌分明
+    pushLogs(amoxA ?? data.medicines.find(m => m.name === '阿莫西林胶囊' && m.brand === '华北制药'),
+      [1, 2, 4, 5, 7, 9, 11, 13], 'a');
+    pushLogs(amoxB, [1, 3, 6, 8, 12], 'b');
+    if (seedLogs.length > 0) {
+      data.logs.push(...seedLogs);
+      changed = true;
+    }
+  }
+
+  try {
+    localStorage.setItem(BRAND_SEED_FLAG, new Date().toISOString());
+  } catch { /* ignore */ }
+  if (changed) console.info('[演示数据] 已补品牌字段并播种分品牌用药记录（阿莫西林 · 华北制药 / 珠海联邦）');
+  return changed;
+}
+
+// ==========================================================
 // 后端 A：localStorage（未配置 Supabase 时的降级方案）
 // ==========================================================
 const LS_KEY = 'smart-medicine-box:db:v1';
@@ -382,7 +538,7 @@ function localWrite(db: DBStructure): void {
 type Row = any;
 
 const MEDICINE_COLUMNS = [
-  'id', 'name', 'image_url', 'form_type', 'category', 'location', 'total_quantity', 'unit',
+  'id', 'name', 'brand', 'image_url', 'form_type', 'category', 'location', 'total_quantity', 'unit',
   'threshold', 'expiry_date', 'last_purchase_date', 'symptoms_treated', 'dosage_instruction',
   'daily_usage', 'side_effects', 'usage_frequency_score',
 ];
@@ -403,6 +559,7 @@ function medToRow(m: Medicine): Row {
   return {
     id: String(m.id),
     name: m.name,
+    brand: m.brand || null,
     image_url: m.image_url || null,
     form_type: m.form_type,
     category: m.category || null,
@@ -427,6 +584,7 @@ function rowToMed(r: Row): Medicine {
   return {
     id: String(r.id),
     name: String(r.name ?? ''),
+    brand: (r.brand as string) ?? undefined,
     image_url: (r.image_url as string) ?? undefined,
     form_type: (r.form_type as FormType) ?? FormType.OTHER,
     category: String(r.category ?? ''),
@@ -469,6 +627,7 @@ function logToRow(l: UsageLog): Row {
     id: String(l.id),
     medicine_id: l.medicine_id,
     medicine_name: l.medicine_name,
+    brand: l.brand || null,
     amount: num(l.amount),
     log_time: l.log_time || new Date().toISOString(),
     user_name: l.user || null,
@@ -480,6 +639,7 @@ function rowToLog(r: Row): UsageLog {
     id: String(r.id),
     medicine_id: String(r.medicine_id ?? ''),
     medicine_name: String(r.medicine_name ?? ''),
+    brand: (r.brand as string) ?? undefined,
     amount: num(r.amount),
     log_time: String(r.log_time ?? ''),
     user: (r.user_name as string) ?? undefined,
@@ -702,6 +862,9 @@ export const MedicineService = {
     // 让「不再过期」药品的补货条目先被清理，再由过期检测为仍过期的样本补齐提醒）
     if (refreshLegacyDemoData(data)) dirty = true;
 
+    // 品牌演示迁移（一次性）：补品牌 + 同名双品牌阿莫西林 + 分品牌用药记录
+    if (seedBrandDemo(data)) dirty = true;
+
     // 过期检测每次加载都执行（此前只在首次播种时运行，
     // 导致药品后来过期时永远不会自动进入补货清单）。
     // 同一数据对象上原地检测 + 单次写入，也修复了旧版
@@ -782,6 +945,8 @@ export const MedicineService = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       medicine_id: String(target.id),
       medicine_name: target.name,
+      // 品牌快照：同名药不同品牌的用量可在用药记录里分别统计
+      brand: target.brand || undefined,
       amount,
       log_time: new Date().toISOString()
     };
@@ -816,9 +981,10 @@ export const MedicineService = {
 
   /**
    * 入库新药品（含自动核销待补货链路）：
-   *  1. 药箱中已存在「同名 + 同剂型」药品时视为补货入库 → 合并更新该条记录
+   *  1. 药箱中已存在「同名 + 同剂型 + 同品牌」药品时视为补货入库 → 合并更新该条记录
    *     （数量/效期/阈值/位置/图片等信息以本次填写为准，保留原 id、名称与使用频率分，
    *     避免产生重复条目；最近购入日期记为今天）；
+   *     品牌不同 → 视为独立条目，可分开记录用药（isSameMedicineIdentity 判定）；
    *  2. 无论新建还是合并，都会核销与之匹配的待补货条目（isRestockMatch 规则），
    *     即「补货不一定要走待补货按钮，入库新药同样能消掉提醒」。
    * 返回 { merged, offsetRestocks } 供 UI 组装提示文案。
@@ -827,10 +993,7 @@ export const MedicineService = {
     const data = await readDB();
     if (!data) return { merged: false, offsetRestocks: [] };
 
-    const trimName = (med.name || '').trim();
-    const idx = data.medicines.findIndex(
-      m => (m.name || '').trim() === trimName && m.form_type === med.form_type
-    );
+    const idx = data.medicines.findIndex(m => isSameMedicineIdentity(m, med));
 
     let merged = false;
     let finalMed: Medicine;
@@ -917,5 +1080,203 @@ export const MedicineService = {
       }
     }
     await writeDB(data);
-  }
+  },
+
+  // --- 数据导入导出（备份/恢复/多设备迁移；localStorage 与 Supabase 双后端通用） ---
+
+  /**
+   * 导出整库为 JSON 字符串。药品的每一个属性（含品牌、图片 base64、
+   * 服用说明等）与待补货清单、用药记录全部详细覆盖，无遗漏字段。
+   */
+  exportData: async (): Promise<string> => {
+    const data = (await readDB()) ?? EMPTY_DB();
+    const payload: ExportPayload = {
+      app: 'medicine-box',
+      version: EXPORT_VERSION,
+      exported_at: new Date().toISOString(),
+      counts: {
+        medicines: data.medicines.length,
+        shoppingList: data.shoppingList.length,
+        logs: data.logs.length,
+      },
+      data,
+    };
+    return JSON.stringify(payload, null, 2);
+  },
+
+  /**
+   * 从 JSON 字符串导入数据（mode: merge=合并去重 / replace=整库覆盖）。
+   * 逐条清洗校验：非法 JSON、缺 medicines 数组直接抛错；单条字段类型不合规
+   * 会被修复（数字兜底 0、日期截断、枚举兜底）或丢弃（缺 id/name），绝不静默写入脏数据。
+   * 返回摘要供 UI toast 展示。
+   */
+  importData: async (raw: string, mode: ImportMode): Promise<ImportResult> => {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new Error('文件不是有效的 JSON，请确认导出的是备份文件本身');
+    }
+
+    // 兼容两种结构：本应用导出的包装格式（{app, data}），或直接的整库结构
+    const obj = parsed as Record<string, unknown>;
+    const dbRaw = (obj && typeof obj === 'object' && 'data' in obj && typeof obj.data === 'object' && obj.data !== null
+      ? obj.data
+      : parsed) as Record<string, unknown>;
+
+    if (!dbRaw || !Array.isArray(dbRaw.medicines)) {
+      throw new Error('备份文件缺少药品数据（medicines），不是本应用的有效备份');
+    }
+
+    const result: ImportResult = {
+      mode,
+      medicines: 0,
+      shoppingList: 0,
+      logs: 0,
+      skippedMedicines: 0,
+      skippedLogs: 0,
+    };
+
+    const incoming: DBStructure = {
+      medicines: (dbRaw.medicines as unknown[]).map(sanitizeMedicine).filter((m): m is Medicine => m !== null),
+      shoppingList: Array.isArray(dbRaw.shoppingList)
+        ? (dbRaw.shoppingList as unknown[]).map(sanitizeItem).filter((i): i is ShoppingItem => i !== null)
+        : [],
+      logs: Array.isArray(dbRaw.logs)
+        ? (dbRaw.logs as unknown[]).map(sanitizeLog).filter((l): l is UsageLog => l !== null)
+        : [],
+    };
+    result.skippedMedicines = (dbRaw.medicines as unknown[]).length - incoming.medicines.length;
+    result.skippedLogs = (Array.isArray(dbRaw.logs) ? (dbRaw.logs as unknown[]).length : 0) - incoming.logs.length;
+
+    if (mode === 'replace') {
+      // 覆盖恢复：整库替换为备份内容
+      await writeDB(incoming);
+    } else {
+      // 合并导入：按 id 去重，冲突时以导入为准；现有数据其余条目保留
+      const current = await readDB();
+      if (!current) throw new Error('当前数据读取失败，为保护现有数据已中止导入');
+
+      const medById = new Map(current.medicines.map(m => [String(m.id), m]));
+      incoming.medicines.forEach(m => medById.set(String(m.id), m));
+      current.medicines = [...medById.values()];
+
+      const itemById = new Map(current.shoppingList.map(i => [String(i.id), i]));
+      incoming.shoppingList.forEach(i => itemById.set(String(i.id), i));
+      current.shoppingList = [...itemById.values()];
+
+      const logById = new Map(current.logs.map(l => [String(l.id), l]));
+      incoming.logs.forEach(l => logById.set(String(l.id), l));
+      current.logs = [...logById.values()];
+
+      await writeDB(current);
+    }
+
+    result.medicines = incoming.medicines.length;
+    result.shoppingList = incoming.shoppingList.length;
+    result.logs = incoming.logs.length;
+    return result;
+  },
 };
+
+// ==========================================================
+// 导入导出：类型与清洗工具
+// ==========================================================
+
+const EXPORT_VERSION = 1;
+
+export type ImportMode = 'merge' | 'replace';
+
+export interface ExportPayload {
+  app: 'medicine-box';
+  version: number;
+  exported_at: string;
+  counts: { medicines: number; shoppingList: number; logs: number };
+  data: DBStructure;
+}
+
+export interface ImportResult {
+  mode: ImportMode;
+  medicines: number;
+  shoppingList: number;
+  logs: number;
+  /** 因缺 id/name 等被丢弃的条目数（脏数据防护，供提示） */
+  skippedMedicines: number;
+  skippedLogs: number;
+}
+
+/** 任意值 → 字符串（null/undefined → 默认值），导入清洗用 */
+const str = (v: unknown, fallback = ''): string =>
+  v === null || v === undefined ? fallback : String(v);
+
+/** 清洗单条药品：字段逐一修复类型；缺 id 或 name 返回 null（丢弃） */
+function sanitizeMedicine(raw: unknown): Medicine | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const id = str(r.id).trim();
+  const name = str(r.name).trim();
+  if (!id || !name) return null;
+  const brand = str(r.brand).trim();
+  const image = str(r.image_url).trim();
+  const formType = (Object.values(FormType) as string[]).includes(str(r.form_type))
+    ? (r.form_type as FormType)
+    : FormType.OTHER;
+  return {
+    id,
+    name,
+    ...(brand ? { brand } : {}),
+    ...(image ? { image_url: image } : {}),
+    form_type: formType,
+    category: str(r.category, '其他'),
+    location: str(r.location, '未知'),
+    total_quantity: num(r.total_quantity),
+    unit: str(r.unit, '粒'),
+    threshold: num(r.threshold),
+    expiry_date: str(r.expiry_date).slice(0, 10),
+    last_purchase_date: str(r.last_purchase_date).slice(0, 10),
+    symptoms_treated: str(r.symptoms_treated),
+    dosage_instruction: str(r.dosage_instruction),
+    daily_usage: num(r.daily_usage),
+    side_effects: str(r.side_effects, '详见说明书'),
+    usage_frequency_score: num(r.usage_frequency_score),
+  };
+}
+
+/** 清洗单条用药记录：缺 id 或 medicine_name 返回 null（丢弃） */
+function sanitizeLog(raw: unknown): UsageLog | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const id = str(r.id).trim();
+  const medicineName = str(r.medicine_name).trim();
+  if (!id || !medicineName) return null;
+  const brand = str(r.brand).trim();
+  const user = str(r.user ?? r.user_name).trim();
+  return {
+    id,
+    medicine_id: str(r.medicine_id),
+    medicine_name: medicineName,
+    ...(brand ? { brand } : {}),
+    amount: num(r.amount),
+    log_time: str(r.log_time) || new Date().toISOString(),
+    ...(user ? { user } : {}),
+  };
+}
+
+/** 清洗单条待补货条目：缺 id 或 medicine_name 返回 null（丢弃） */
+function sanitizeItem(raw: unknown): ShoppingItem | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const id = str(r.id).trim();
+  const medicineName = str(r.medicine_name).trim();
+  if (!id || !medicineName) return null;
+  const reason = ['过期', '用尽', '手动添加'].includes(str(r.reason))
+    ? (r.reason as ShoppingItem['reason'])
+    : '手动添加';
+  return {
+    id,
+    medicine_name: medicineName,
+    reason,
+    status: ShoppingStatus.PENDING,
+    created_at: str(r.created_at) || new Date().toISOString(),
+  };
+}
