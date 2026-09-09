@@ -269,8 +269,8 @@ export const FORM_UNIT_MAP: Record<string, string> = {
   [FormType.TABLET]: '片',
   [FormType.CAPSULE]: '粒',
   [FormType.GRANULE]: '袋',
-  [FormType.LIQUID]: '瓶',
-  [FormType.TOPICAL]: '支',
+  [FormType.LIQUID]: '支',
+  [FormType.TOPICAL]: '瓶',
   [FormType.SPRAY]: '瓶',
   [FormType.OTHER]: '盒',
 };
