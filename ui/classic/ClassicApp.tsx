@@ -290,11 +290,12 @@ function App() {
             {/* 药品列表 */}
             {sortedGroupKeys.length === 0 ? (
               medicines.length === 0 ? (
-                // 投产后空箱引导：与「搜索无结果」区分开，告诉用户如何录入第一瓶药
+                // 投产后空箱引导：与「搜索无结果」区分开；桌面/手机分开指引，各端只展示与自己界面一致的操作入口
                 <div className="text-center py-20 bg-white rounded-2xl shadow-sm border border-dashed border-slate-200">
                   <div className="text-4xl mb-4">💊</div>
                   <div className="text-slate-600 font-medium">药箱还是空的</div>
-                  <div className="text-slate-400 text-sm mt-2">点击右上角（手机端为底部中央 + 按钮）入库第一瓶药</div>
+                  <div className="hidden md:block text-slate-400 text-sm mt-2">点击右上角「入库新药」按钮，录入您的第一种药品</div>
+                  <div className="md:hidden text-slate-400 text-sm mt-2">点击底部中央 + 按钮，录入您的第一种药品</div>
                 </div>
               ) : (
                 <div className="text-center py-20">

@@ -127,7 +127,7 @@ export function getHealthOverview(medicines: Medicine[]): HealthOverview {
   let headline = '今日药箱状态良好，常备物资充裕';
   if (total === 0) {
     grade = '待入库';
-    headline = '药箱还是空的，先入库几瓶常备药吧';
+    headline = '药箱还是空的，先入库几种常备药吧';
   } else {
     if (score >= 85) grade = '优良';
     else if (score >= 70) grade = '良好';

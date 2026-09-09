@@ -329,15 +329,18 @@ export const CategorySections: React.FC<{ meds: Medicine[]; /** 药箱整体为�
 
   if (grouped.length === 0) {
     if (boxEmpty) {
-      // 投产后空箱引导：与「筛选无结果」区分开，告诉用户如何录入第一瓶药
+      // 投产后空箱引导：与「筛选无结果」区分开；桌面/手机分开指引，各端只展示与自己界面一致的操作入口
       return (
         <div className="text-center py-16 rounded-3xl bg-m3-surface-container-lowest border border-dashed border-m3-outline-variant">
           <div className="w-14 h-14 rounded-2xl bg-m3-primary/10 text-m3-primary flex items-center justify-center mx-auto mb-4">
             <Icon name="inventory_2" className="w-7 h-7" />
           </div>
           <p className="text-sm font-medium text-m3-on-surface">药箱还是空的</p>
-          <p className="text-xs text-m3-on-surface-variant mt-1.5 leading-relaxed">
-            点击右上角「入库新药」（手机端为底部中央 <b className="text-m3-primary">+</b> 按钮），录入第一瓶药
+          <p className="hidden md:block text-xs text-m3-on-surface-variant mt-1.5 leading-relaxed">
+            点击右上角「入库新药」，录入您的第一种药品
+          </p>
+          <p className="md:hidden text-xs text-m3-on-surface-variant mt-1.5 leading-relaxed">
+            点击底部中央 <b className="text-m3-primary">+</b> 按钮，录入您的第一种药品
           </p>
         </div>
       );
