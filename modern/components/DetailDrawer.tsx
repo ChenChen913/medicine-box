@@ -1,8 +1,9 @@
 /**
  * 文件名: modern/components/DetailDrawer.tsx
  * 功能: 药品详情弹窗（新版 UI）
- * 描述: 屏幕正中央的居中弹窗（桌面/移动统一），内部可上下滑动，
- *       点击空白遮罩即可关闭 —— 适合单手操作。
+ * 描述: 桌面端居中卡片 / 手机端底部抽屉（贴底全宽、只圆上角、高度收敛到
+ *       80vh 保证顶部留白可点击关闭，含拖拽指示条），内部可上下滑动，
+ *       点击空白遮罩即可关闭。
  *       全部展示真实数据：库存、效期、用法、禁忌、位置、适应症、
  *       该药最近打卡时间线（usage_logs）；
  *       「30 天库存消耗趋势」由当前库存 + 打卡记录反推估算（无记录时优雅降级）。
@@ -88,14 +89,19 @@ export const DetailDrawer: React.FC<Props> = ({ med, logs, onClose, onConsume, o
       {/* 背景遮罩：点击空白处直接关闭（单手友好） */}
       <div className="fixed inset-0 bg-m3-on-surface/30 backdrop-blur-[2px] z-[60] animate-in fade-in duration-200" onClick={onClose} />
 
-      {/* 居中弹窗容器：pointer-events-none 让空白区域点击穿透到遮罩 */}
-      <div className="fixed inset-0 z-[61] flex items-center justify-center p-4 pointer-events-none">
+      {/* 弹窗容器：手机端贴底抽屉 / 桌面端居中；pointer-events-none 让空白区域点击穿透到遮罩 */}
+      <div className="fixed inset-0 z-[61] flex items-end md:items-center justify-center md:p-4 pointer-events-none">
         <div
-          className="pointer-events-auto relative w-full max-w-lg max-h-[86vh] bg-m3-surface-container-lowest rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+          className="pointer-events-auto relative w-full md:max-w-lg max-h-[80vh] md:max-h-[86vh] bg-m3-surface-container-lowest rounded-t-3xl md:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-8 md:slide-in-from-bottom-0 md:zoom-in-95 duration-200"
           role="dialog"
           aria-modal="true"
           aria-label={`${med.name} 详情`}
         >
+
+        {/* 手机端底部抽屉拖拽指示条 */}
+        <div className="md:hidden shrink-0 flex justify-center pt-2.5 bg-m3-surface-container-lowest" aria-hidden="true">
+          <span className="w-10 h-1 rounded-full bg-m3-outline-variant/60" />
+        </div>
 
         {/* 头部 */}
         <div className="px-5 md:px-6 py-4 border-b border-m3-surface-container-low flex items-center justify-between gap-3 shrink-0">
@@ -217,8 +223,8 @@ export const DetailDrawer: React.FC<Props> = ({ med, logs, onClose, onConsume, o
           </div>
         </div>
 
-        {/* 底部操作 */}
-        <div className="px-5 md:px-6 py-4 border-t border-m3-surface-container-low flex items-center gap-3 bg-m3-surface-container-lowest shrink-0">
+        {/* 底部操作（含手机端安全区适配，避开 iPhone Home 横条） */}
+        <div className="px-5 md:px-6 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-4 border-t border-m3-surface-container-low flex items-center gap-3 bg-m3-surface-container-lowest shrink-0">
           <button
             type="button"
             onClick={() => onRestock(med)}

@@ -6,6 +6,8 @@
  *       - DeleteDialog   删除确认
  *       - RestockDialog  补货登记（新数量 + 新效期 → restockMedicine）
  *       - MedicineForm   入库 / 编辑表单（覆盖全部真实字段，含本地图片上传）
+ *       响应式形态：桌面端居中卡片；手机端底部抽屉（贴底全宽、只圆上角、
+ *       高度收敛到 76vh 保证顶部留白可点击关闭，含拖拽指示条与底部安全区）
  */
 
 import React, { useState } from 'react';
@@ -19,30 +21,37 @@ import { M3Select, SelectOption } from './Select';
 
 export const ModalShell: React.FC<{ title: string; subtitle?: string; icon?: IconName; onClose: () => void; children: React.ReactNode; wide?: boolean }> =
 ({ title, subtitle, icon = 'info', onClose, children, wide }) => (
-  <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+  // 手机端 items-end 贴底呈抽屉形态，桌面端保持居中卡片
+  <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-4">
     <div className="fixed inset-0 bg-m3-on-surface/40 backdrop-blur-[2px] animate-in fade-in duration-200" onClick={onClose} />
     <div
-      className={`relative bg-m3-surface-container-lowest rounded-3xl w-full ${wide ? 'max-w-xl' : 'max-w-md'} max-h-[90vh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in-95 duration-200`}
+      className={`relative bg-m3-surface-container-lowest w-full ${wide ? 'md:max-w-xl' : 'md:max-w-md'} max-h-[76vh] md:max-h-[90vh] overflow-y-auto shadow-2xl rounded-t-3xl md:rounded-3xl animate-in fade-in slide-in-from-bottom-8 md:slide-in-from-bottom-0 md:zoom-in-95 duration-200`}
       role="dialog"
       aria-modal="true"
       aria-label={title}
     >
-      <div className="p-5 md:p-6 pb-3 flex items-center justify-between border-b border-m3-surface-container-low sticky top-0 bg-m3-surface-container-lowest z-10">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-m3-primary/10 text-m3-primary flex items-center justify-center shrink-0">
-            <Icon name={icon} className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-m3-on-surface tracking-tight">{title}</h3>
-            {subtitle && <span className="text-xs text-m3-on-surface-variant">{subtitle}</span>}
-          </div>
+      {/* 粘性头部（含手机端拖拽指示条）：长表单滚动时关闭按钮始终可见可点 */}
+      <div className="sticky top-0 z-10 bg-m3-surface-container-lowest border-b border-m3-surface-container-low">
+        <div className="md:hidden flex justify-center pt-2.5" aria-hidden="true">
+          <span className="w-10 h-1 rounded-full bg-m3-outline-variant/60" />
         </div>
-        <button type="button" aria-label="关闭" onClick={onClose}
-          className="w-8 h-8 rounded-full bg-m3-surface-container-low hover:bg-m3-surface-container text-m3-on-surface-variant flex items-center justify-center transition-colors shrink-0">
-          <Icon name="close" className="w-[18px] h-[18px]" />
-        </button>
+        <div className="p-5 md:p-6 pb-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-m3-primary/10 text-m3-primary flex items-center justify-center shrink-0">
+              <Icon name={icon} className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-m3-on-surface tracking-tight">{title}</h3>
+              {subtitle && <span className="text-xs text-m3-on-surface-variant">{subtitle}</span>}
+            </div>
+          </div>
+          <button type="button" aria-label="关闭" onClick={onClose}
+            className="w-8 h-8 rounded-full bg-m3-surface-container-low hover:bg-m3-surface-container text-m3-on-surface-variant flex items-center justify-center transition-colors shrink-0">
+            <Icon name="close" className="w-[18px] h-[18px]" />
+          </button>
+        </div>
       </div>
-      <div className="p-5 md:p-6">{children}</div>
+      <div className="px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:px-6 md:pt-6 md:pb-6">{children}</div>
     </div>
   </div>
 );
