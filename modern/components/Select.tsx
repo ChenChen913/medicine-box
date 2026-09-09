@@ -9,6 +9,8 @@
  *       - 点击外部关闭；选中行主色 + 对勾；触发器箭头随开合旋转
  *       - 三种形态：field（表单输入框样式，可带选中项图标）/ pill（筛选胶囊
  *         样式，可带数量徽章）/ compact（窄宽度，如数量单位）
+ *       - 入场动画：定位就绪后挂载 m3-menu-in（纯淡入+缩放，无水平位移），
+ *         下翻以顶边为缩放原点、上翻以底边为原点，观感为「自触发器展开」
  */
 
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
@@ -41,7 +43,7 @@ interface M3SelectProps {
   menuWidth?: 'match' | 'auto';
 }
 
-interface MenuPos { top: number; left: number; maxHeight: number; width: number | null }
+interface MenuPos { top: number; left: number; maxHeight: number; width: number | null; dropUp: boolean }
 
 export const M3Select: React.FC<M3SelectProps> = ({
   value, options, onChange, variant = 'field', ariaLabel, className = '', menuWidth = 'match',
@@ -76,6 +78,7 @@ export const M3Select: React.FC<M3SelectProps> = ({
       left,
       maxHeight,
       width: menuWidth === 'match' ? r.width : null,
+      dropUp,
     });
   }, [options.length, menuWidth]);
 
@@ -221,7 +224,9 @@ export const M3Select: React.FC<M3SelectProps> = ({
         width: pos?.width ? `${pos.width}px` : undefined,
         visibility: pos ? 'visible' : 'hidden',
       }}
-      className={`z-[80] bg-m3-surface-container-lowest rounded-2xl shadow-[0_18px_50px_-12px_rgba(0,0,0,0.28)] border border-m3-outline-variant/50 py-1.5 overflow-y-auto overscroll-contain outline-none animate-in fade-in zoom-in-95 duration-150 ${menuWidth === 'auto' ? 'w-max max-w-[calc(100vw-16px)]' : ''} ${pos?.top !== null && pos && pos.top > window.innerHeight / 2 ? 'origin-bottom' : 'origin-top'}`}
+      // 入场动画仅在定位就绪后挂载（首帧即处于最终坐标，杜绝占位坐标起播）；
+      // m3-menu-in 为纯淡入+缩放，无位移分量（见 index.css 内注释）
+      className={`z-[80] bg-m3-surface-container-lowest rounded-2xl shadow-[0_18px_50px_-12px_rgba(0,0,0,0.28)] border border-m3-outline-variant/50 py-1.5 overflow-y-auto overscroll-contain outline-none ${menuWidth === 'auto' ? 'w-max max-w-[calc(100vw-16px)]' : ''} ${pos ? `${pos.dropUp ? 'origin-bottom' : 'origin-top'} m3-menu-in` : 'invisible'}`}
     >
       {options.map((o, i) => {
         const active = i === focusIdx;
