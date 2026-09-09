@@ -11,6 +11,7 @@ import { Medicine } from '../../types';
 import { getCategoryWeight } from '../../services/medicineService';
 import { HealthOverview, getStatus, getCategoryMeta } from '../ui';
 import { Icon, IconName } from '../icons';
+import { M3Select, SelectOption } from './Select';
 import { DesktopCard, MobileCard, MobileMiniCard } from './MedicineCards';
 
 export type FilterKey = 'all' | 'normal' | 'low' | 'expiring' | 'expired';
@@ -251,20 +252,28 @@ export const SearchFilter: React.FC<{
           </button>
         );
       })}
-      {locations.length > 1 && (
-        <div className="relative shrink-0">
-          <select
+      {locations.length > 1 && (() => {
+        const locOptions: SelectOption[] = [
+          { value: '', label: '所有存放位置', icon: 'grid_view', iconWrap: 'bg-m3-primary/10 text-m3-primary', trailing: String(medicines.length) },
+          ...locations.map(loc => ({
+            value: loc,
+            label: loc,
+            icon: 'room' as IconName,
+            iconWrap: 'bg-m3-surface-container-high text-m3-on-surface-variant',
+            trailing: String(medicines.filter(m => (m.location || '') === loc).length),
+          })),
+        ];
+        return (
+          <M3Select
+            variant="pill"
+            ariaLabel="按存放位置筛选"
+            menuWidth="auto"
             value={location}
-            onChange={e => onLocation(e.target.value)}
-            className="appearance-none pl-3.5 pr-8 py-2 rounded-full bg-m3-surface-container-lowest hover:bg-m3-surface-container-low text-xs text-m3-on-surface-variant font-medium cursor-pointer outline-none transition-colors"
-            aria-label="按存放位置筛选"
-          >
-            <option value="">所有存放位置</option>
-            {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
-          </select>
-          <Icon name="expand_more" className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-m3-outline pointer-events-none" />
-        </div>
-      )}
+            options={locOptions}
+            onChange={onLocation}
+          />
+        );
+      })()}
     </div>
   </div>
   );

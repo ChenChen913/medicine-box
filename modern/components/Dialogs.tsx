@@ -12,6 +12,8 @@ import React, { useState } from 'react';
 import { FormType, Medicine } from '../../types';
 import { MedicineService, todayDateString, localDateString } from '../../services/medicineService';
 import { Icon, IconName } from '../icons';
+import { getCategoryMeta } from '../ui';
+import { M3Select, SelectOption } from './Select';
 
 // ---------- 通用弹窗外壳 ----------
 
@@ -130,6 +132,44 @@ export const RestockDialog: React.FC<RestockProps> = ({ item, onClose, onDone })
 const CATEGORIES = ['感冒药', '止痛药', '肠胃药', '抗生素', '心脑血管', '抗过敏', '咽喉用药', '外用药', '眼科用药', '保健品', '医疗器械', '其他'];
 const UNITS = ['粒', '片', '盒', '袋', '瓶', '支', 'ml', '包', '克'];
 
+/** 剂型 → 图标与配色（与首页分类卡片同一套 M3 token） */
+const FORM_TYPE_META: Record<string, { icon: IconName; wrap: string }> = {
+  '片剂': { icon: 'medication', wrap: 'bg-m3-primary/10 text-m3-primary' },
+  '胶囊': { icon: 'capsule', wrap: 'bg-m3-secondary-fixed/40 text-m3-secondary' },
+  '颗粒': { icon: 'granule', wrap: 'bg-m3-tertiary-fixed text-m3-tertiary-container' },
+  '口服液': { icon: 'water_drop', wrap: 'bg-m3-primary-fixed/40 text-m3-primary' },
+  '外用': { icon: 'sanitizer', wrap: 'bg-m3-error-container text-m3-error' },
+  '喷雾': { icon: 'cloud', wrap: 'bg-m3-surface-container-high text-m3-primary' },
+  '其他': { icon: 'more_horiz', wrap: 'bg-m3-surface-container-high text-m3-on-surface-variant' },
+};
+
+/** 健康分类下拉项：带分类专属渐变图标；兼容库里不在预设清单中的自定义分类 */
+function buildCategoryOptions(value: string): SelectOption[] {
+  const opts: SelectOption[] = CATEGORIES.map(c => {
+    const meta = getCategoryMeta(c);
+    return { value: c, label: c, icon: meta.icon, iconWrap: `bg-gradient-to-br ${meta.iconBg} ${meta.iconColor}` };
+  });
+  if (!CATEGORIES.includes(value)) {
+    const meta = getCategoryMeta(value);
+    opts.push({ value, label: value, icon: meta.icon, iconWrap: `bg-gradient-to-br ${meta.iconBg} ${meta.iconColor}` });
+  }
+  return opts;
+}
+
+/** 剂型下拉项：同样兼容预设外的历史数据 */
+function buildFormTypeOptions(value: string): SelectOption[] {
+  const vals = Object.values(FormType) as string[];
+  const opts: SelectOption[] = vals.map(t => ({
+    value: t, label: t,
+    icon: FORM_TYPE_META[t]?.icon ?? 'medication',
+    iconWrap: FORM_TYPE_META[t]?.wrap ?? 'bg-m3-surface-container-high text-m3-on-surface-variant',
+  }));
+  if (!vals.includes(value)) {
+    opts.push({ value, label: value, icon: 'more_horiz', iconWrap: 'bg-m3-surface-container-high text-m3-on-surface-variant' });
+  }
+  return opts;
+}
+
 interface FormProps { editing?: Medicine; onClose: () => void; onDone: (name: string) => void; }
 
 /** 从 "每日X次，每次Y单位" 解析频次（与经典版同一正则） */
@@ -236,18 +276,26 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, onClose, onDone }) 
         </label>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <label className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5">
             <span className={labelCls}>所属健康分类</span>
-            <select className={inputCls} value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1.5">
+            <M3Select
+              variant="field"
+              ariaLabel="所属健康分类"
+              value={form.category || '其他'}
+              options={buildCategoryOptions(form.category || '其他')}
+              onChange={v => setForm({ ...form, category: v })}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
             <span className={labelCls}>剂型</span>
-            <select className={inputCls} value={form.form_type} onChange={e => setForm({ ...form, form_type: e.target.value as FormType })}>
-              {Object.values(FormType).map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </label>
+            <M3Select
+              variant="field"
+              ariaLabel="剂型"
+              value={form.form_type || FormType.TABLET}
+              options={buildFormTypeOptions(form.form_type || FormType.TABLET)}
+              onChange={v => setForm({ ...form, form_type: v as FormType })}
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -255,9 +303,14 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, onClose, onDone }) 
             <span className={labelCls}>初始入库数量</span>
             <div className="flex gap-2">
               <input required type="number" min="0" step="any" className={inputCls} value={form.total_quantity ?? ''} onChange={e => setForm({ ...form, total_quantity: parseFloat(e.target.value) || 0 })} placeholder="如：24" />
-              <select className={`${inputCls} !w-20 text-center px-2`} value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })}>
-                {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-              </select>
+              <M3Select
+                variant="compact"
+                ariaLabel="数量单位"
+                className="w-20 shrink-0"
+                value={form.unit || '粒'}
+                options={(UNITS.includes(form.unit || '粒') ? UNITS : [form.unit || '粒', ...UNITS]).map(u => ({ value: u, label: u }))}
+                onChange={v => setForm({ ...form, unit: v })}
+              />
             </div>
           </label>
           <label className="flex flex-col gap-1.5 col-span-1">
