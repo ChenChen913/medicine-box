@@ -102,6 +102,12 @@ const clickContains = (page, text) => page.evaluate(t => {
   const el = Array.from(document.querySelectorAll('button,[role=button],a')).find(e => (e.innerText || '').includes(t));
   if (!el) return false; el.click(); return true;
 }, text);
+/** 真实鼠标点击（按 aria-label 精确匹配）：合成 .click() 不会让按钮获得焦点，
+ *  验证"焦点归位"这类行为时必须用真实点击（浏览器会把焦点给按钮） */
+const realClickByAria = async (page, label) => {
+  const h = await page.evaluateHandle(l => Array.from(document.querySelectorAll('button')).find(x => (x.getAttribute('aria-label') || '') === l), label);
+  const el = h.asElement(); if (!el) return false; await el.click(); return true;
+};
 const realClick = async (page, text) => {
   const h = await page.evaluateHandle(t => Array.from(document.querySelectorAll('button,[role=button],a'))
     .find(e => (((e.innerText || '') + ' ' + (e.getAttribute('aria-label') || '')).trim()) === t), text);
@@ -843,18 +849,71 @@ async function main() {
           if (!trg) return { err: 'NO_TRIGGER' };
           trg.click();
           await new Promise(r => setTimeout(r, 600));
-          const panel = document.querySelector('[aria-label="有效截止日期选择器"]');
+          const panel = document.querySelector('[role=dialog][aria-label^="有效截止日期"]');
           const pr = panel ? panel.getBoundingClientRect() : null;
           return {
-            win: window.innerWidth,
+            win: window.innerWidth, winH: window.innerHeight,
             docScroll: document.documentElement.scrollWidth,
             modalScroll: modal.scrollWidth, modalClient: modal.clientWidth,
             pLeft: pr ? Math.round(pr.left) : -1, pRight: pr ? Math.round(pr.right) : -1,
+            pTop: pr ? Math.round(pr.top) : -1, pBottom: pr ? Math.round(pr.bottom) : -1,
           };
         });
-        const ok = !geo.err && geo.docScroll <= geo.win + 1 && geo.modalScroll <= geo.modalClient + 1 && geo.pLeft >= 0 && geo.pRight <= geo.win;
-        record('G9.8-' + vw, vw + 'x' + vh + ' 日期面板夹紧在弹窗内（无横向滚动）', ok, JSON.stringify(geo));
+        // 关键：既不横向溢出，也不纵向超出屏幕（老板要求"不用滚动就能看全"）
+        const ok = !geo.err && geo.docScroll <= geo.win + 1 && geo.modalScroll <= geo.modalClient + 1
+          && geo.pLeft >= 0 && geo.pRight <= geo.win && geo.pTop >= 0 && geo.pBottom <= geo.winH;
+        record('G9.8-' + vw, vw + 'x' + vh + ' 日期弹层完整可见（横向不溢出、纵向不用滚动）', ok, JSON.stringify(geo));
         await vp.close();
+      }
+
+      // G9.9 独立弹层的焦点与滚动行为（Portal 到 body 后必须自管焦点；且不得把表单顶走）
+      {
+        const dp = await newPage(browser, 390, 844, true);
+        await openApp(dp);
+        await dp.evaluate(() => {
+          const add = Array.from(document.querySelectorAll('button,[role=button]'))
+            .find(x => (((x.innerText || '') + ' ' + (x.getAttribute('aria-label') || '')).trim()) === '入库新药');
+          if (add) add.click();
+        });
+        await dp.waitForSelector('[role=dialog]', { timeout: 15000 }); await sleep(900);
+        const scrollBefore = await dp.evaluate(() => {
+          const ds = Array.from(document.querySelectorAll('[role=dialog]'));
+          const modal = ds[ds.length - 1];
+          return modal ? modal.scrollTop : -1;
+        });
+        // 用真实鼠标点击触发器：合成 .click() 不会让按钮获得焦点，焦点归位就无从谈起
+        await realClickByAria(dp, '有效截止日期');
+        await sleep(800);
+        const focusInfo = await dp.evaluate(async (scrollBefore) => {
+          const ds = Array.from(document.querySelectorAll('[role=dialog]'));
+          const modal = ds[ds.length - 1];
+          const picker = document.querySelector('[role=dialog][aria-label^="有效截止日期"]');
+          const a = document.activeElement;
+          const focusedInside = !!(picker && a && picker.contains(a));
+          return { focusedInside, scrollBefore, scrollAfterOpen: modal.scrollTop, modalFound: !!modal, pickerFound: !!picker };
+        }, scrollBefore);
+        // Tab 十次是否仍在弹层内
+        let escapes = 0;
+        for (let i = 0; i < 10; i++) {
+          await dp.keyboard.press('Tab');
+          const inside = await dp.evaluate(() => {
+            const picker = document.querySelector('[role=dialog][aria-label^="有效截止日期"]');
+            const a = document.activeElement;
+            return !!(picker && a && picker.contains(a));
+          });
+          if (!inside) escapes++;
+        }
+        await dp.keyboard.press('Escape'); await sleep(600);
+        const after = await dp.evaluate(() => {
+          const picker = document.querySelector('[role=dialog][aria-label^="有效截止日期"]');
+          const a = document.activeElement;
+          return { closed: !picker, focusedLabel: a ? (a.getAttribute('aria-label') || (a.innerText || '').trim().slice(0, 12)) : 'none' };
+        });
+        record('G9.9', '日期弹层：打开即聚焦弹层内 / Tab 不逃逸 / Esc 关闭且焦点归位 / 不顶动表单',
+          !focusInfo.err && focusInfo.focusedInside && escapes === 0 && after.closed && /有效截止日期/.test(after.focusedLabel)
+            && focusInfo.scrollBefore === focusInfo.scrollAfterOpen,
+          JSON.stringify({ ...focusInfo, escapes, after }));
+        await dp.close();
       }
 
       record('G9.7', '新日期选择器：可一键跳到年份网格并选中年份/日期',
