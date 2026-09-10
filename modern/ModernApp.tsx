@@ -30,6 +30,16 @@ const RestockView = React.lazy(() =>
 const LogsView = React.lazy(() =>
   import('./components/Views').then(m => ({ default: m.LogsView })));
 
+// 懒加载组件的占位：首屏不含这些组件，弱网下点开需要等一下——
+// 给出可见反馈，避免"点了没反应"被误当成卡死。
+const dialogLoading = (
+  <div className="fixed inset-0 z-[70] flex items-center justify-center bg-m3-on-surface/20">
+    <div className="rounded-2xl bg-m3-surface-container-lowest px-4 py-3 text-sm text-m3-on-surface-variant shadow-lg">
+      加载中…
+    </div>
+  </div>
+);
+
 import {
   SearchFilter, CategorySections, MobileHealthCard,
   HealthBanner, MetricGrid, useFilteredMedicines, usePinyinIndex,
@@ -413,7 +423,7 @@ const ModernApp: React.FC = () => {
 
       {/* 抽屉与弹窗 */}
       {drawerMed && (
-        <React.Suspense fallback={null}>
+        <React.Suspense fallback={dialogLoading}>
           <DetailDrawer
             med={drawerMed}
             logs={logs}
@@ -458,7 +468,7 @@ const ModernApp: React.FC = () => {
 
       {/* 数据备份与恢复（导出/导入，新版 UI 入口：桌面顶栏 + 移动头部） */}
       {backupOpen && (
-        <React.Suspense fallback={null}>
+        <React.Suspense fallback={dialogLoading}>
           <DataBackupDialog
             onClose={() => setBackupOpen(false)}
             onDone={message => {
