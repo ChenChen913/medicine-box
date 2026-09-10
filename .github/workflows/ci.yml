@@ -1,4 +1,4 @@
-name: CI（类型检查 / 服务层测试 / 构建）
+name: CI（类型检查 / 测试 / 构建 / 浏览器 E2E）
 
 on:
   push:
@@ -32,8 +32,18 @@ jobs:
       - name: 类型检查（tsc --noEmit）
         run: npm run typecheck
 
-      - name: 服务层测试（含数据损坏保护 / 输入防御 / 时区 / 属性测试）
+      - name: 服务层测试（170 断言：损坏保护 / 输入防御 / 时区 / 属性测试）
         run: npm test
+
+      - name: 代码规范（eslint）
+        run: npm run lint
 
       - name: 构建（vite build）
         run: npm run build
+
+      # 浏览器端验收：响应式 / 无障碍与键盘 / PWA 离线 / 数据安全 / 布局回归 / 历史缺陷回归
+      # 依赖 runner 自带的 Chrome（脚本会自动探测；探测不到会以退出码 2 明确报错）
+      - name: 浏览器端 E2E（43 项）
+        run: npm run test:e2e
+        env:
+          E2E_CHROME: /usr/bin/google-chrome

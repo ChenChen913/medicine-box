@@ -37,6 +37,12 @@ export default tseslint.config(
     },
   },
   {
+    // E2E 脚本跑在 node 里，但 page.evaluate 的回调体是浏览器上下文（会用到 document/window），
+    // 所以两种 globals 都要给。
+    files: ['scripts/e2e.mjs'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
+  },
+  {
     // Node 侧脚本与构建配置：CommonJS 配置文件的 require() 是正常的
     files: ['scripts/**/*.mjs', '**/*.config.js', '*.config.js'],
     languageOptions: { globals: { ...globals.node } },

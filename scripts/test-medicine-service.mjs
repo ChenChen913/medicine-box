@@ -134,6 +134,8 @@ function createLocalStorage() {
       for (const k of Object.keys(calls)) calls[k] = 0;
     },
     raw(k) { return map.has(String(k)) ? map.get(String(k)) : null; },
+    /** 全部键值快照（失败原子性用：逐字节比对） */
+    dump() { return Object.fromEntries(map); },
     seed(db, device) {
       api.hardReset();
       if (device !== 'fresh') map.set(PROD_RESET_FLAG, '2026-09-09T00:00:00.000Z');
@@ -253,10 +255,10 @@ async function buildBundle() {
 // ==========================================================
 // 时区子进程：TZ 由进程环境决定 + 假时钟固定时刻
 // ==========================================================
-function tzChildMain(tz) {
+function tzChildMain(tz, instantISO) {
   const bundle = process.env.MB_BUNDLE;
   const RealDate = Date;
-  const FIXED_MS = RealDate.parse('2026-03-01T20:30:00.000Z'); // 东八区已是 03-02，UTC 还是 03-01
+  const FIXED_MS = RealDate.parse(instantISO || '2026-03-01T20:30:00.000Z'); // 默认：东八区已是 03-02，UTC 还是 03-01
   class FakeDate extends RealDate {
     constructor(...a) { if (a.length === 0) super(FIXED_MS); else super(...a); }
     static now() { return FIXED_MS; }
@@ -281,32 +283,46 @@ function tzChildMain(tz) {
       todayDateString: mod.todayDateString(),
       localDateString: mod.localDateString(new RealDate(FIXED_MS)),
       storageMode: mod.storageMode,
+      instant: new RealDate(FIXED_MS).toISOString(),
       expiryBoundary: {},
       writtenLastPurchase: null,
+      consumeLogTime: null,
+      logCount: 0,
       sortedOrder: null,
       parseOffsets: null,
     };
 
-    // 过期边界：本地今天 / 本地昨天
+    // 过期边界：本地今天（不算过期）/ 本地昨天（过期）/ 本地明天（不算过期）
     const y = new RealDate(FIXED_MS);
     y.setDate(y.getDate() - 1);
     const yStr = mod.localDateString(y);
+    const tm = new RealDate(FIXED_MS);
+    tm.setDate(tm.getDate() + 1);
+    const tmStr = mod.localDateString(tm);
     seedDB({
       medicines: [
         makeMed({ id: 'tz-today', name: '今天到期药', expiry_date: expectedLocalToday, category: '感冒', usage_frequency_score: 5 }),
         makeMed({ id: 'tz-yest', name: '昨天过期药', expiry_date: yStr, category: '感冒', usage_frequency_score: 5 }),
+        makeMed({ id: 'tz-tom', name: '明天到期药', expiry_date: tmStr, category: '感冒', usage_frequency_score: 5 }),
       ],
       shoppingList: [], logs: [],
     }, 'migrated');
     await svc.getMedicines();
     const list = await svc.getShoppingList();
-    out.expiryBoundary = { yesterday: yStr, expiredNames: list.map(i => i.medicine_name) };
+    out.expiryBoundary = { today: expectedLocalToday, yesterday: yStr, tomorrow: tmStr, expiredNames: list.map(i => i.medicine_name) };
 
     // 写入路径：入库时未填 last_purchase_date → 应写本地今天
     seedDB(emptyDB(), 'migrated');
     await svc.addMedicine(makeMed({ id: 'tz-write', name: '时区写入药', expiry_date: '2099-12-31', last_purchase_date: '' }));
     const meds = await svc.getMedicines();
     out.writtenLastPurchase = meds.length ? meds[0].last_purchase_date : null;
+
+    // 打卡落库时间：假时钟固定时刻下应精确等于该时刻（不受时区偏移影响）
+    seedDB({ medicines: [makeMed({ id: 'tz-consume', name: '打卡药', total_quantity: 5, expiry_date: '2099-12-31' })], shoppingList: [], logs: [] }, 'migrated');
+    await svc.consumeMedicine('tz-consume', 1);
+    const logs = await svc.getUsageLogs();
+    out.consumeLogTime = logs.length ? logs[0].log_time : null;
+    out.logCount = logs.length;
 
     // 排序：last_purchase_date 新→旧（同类目权重、同 usage_frequency_score）
     const mk = (id, d) => makeMed({ id, name: '排序药' + id, expiry_date: '2099-12-31', last_purchase_date: d, category: '感冒', usage_frequency_score: 5 });
@@ -783,10 +799,9 @@ async function main() {
     check(r.threw, {
       expected: '抛错，或明确返回 null（读取失败语义）',
       actual: '未抛错，返回 ' + j(r.value) + '（与「空药箱」不可区分）',
-      evidence: 'services/medicineService.ts:470 取读结果 ?? EMPTY_DB() —— 该调试入口仍保留旧版写法',
-      severity: '低（调试/兼容入口；UI 主链路 getMedicines/getShoppingList/getUsageLogs 均已抛错）',
+      evidence: 'services/medicineService.ts:531-537 fetchData 读取失败即抛 READ_FAIL_MSG（首轮验收修复项：旧写法为 ?? EMPTY_DB()）',
     });
-    return 'fetchData 未抛错';
+    return 'fetchData 抛错（读取失败语义正确）';
   });
   await run('E9', '损坏状态下 checkExpiry()（可写入口）应让调用方感知失败', async () => {
     storage.seed(CORRUPT, 'migrated');
@@ -794,10 +809,9 @@ async function main() {
     check(r.threw, {
       expected: '抛错或明确返回失败',
       actual: '未抛错，静默 resolve(' + j(r.value) + ') —— 与「无需补货」不可区分',
-      evidence: 'services/medicineService.ts:597-603 读取失败时直接 return',
-      severity: '低（失败时不会破坏数据，但调用方完全无法感知读取失败）',
+      evidence: 'services/medicineService.ts:673-680 checkExpiry 读取失败即抛错（首轮验收修复项：旧写法为静默 return）',
     });
-    return 'checkExpiry 静默返回';
+    return 'checkExpiry 抛错（调用方可感知）';
   });
   await run('E10', '存储读通道不可用（getItem 抛错）时同样走失败语义且不覆盖数据', async () => {
     seedDB({ medicines: [makeMed({ id: 'E-10' })], shoppingList: [], logs: [] }, 'migrated');
@@ -829,17 +843,16 @@ async function main() {
       storage.clearWriteFailure();
       const events = storageEvents.slice();
       const extra = extraEvidence ? extraEvidence() : '';
-      check(r.threw, {
-        expected: '抛错，或返回明确的失败语义（如 {ok:false}）让调用方感知',
-        actual: '未抛错；返回值 ' + j(r.value) + '（与成功路径同形，调用方无法感知失败）',
-        evidence: 'services/medicineService.ts:229-237 localWrite 只 console.error + notifyStorageError，不向上抛。'
+      check(r.threw && /保存失败/.test(String(r.error && r.error.message)), {
+        expected: '抛错且错误信息明确（数据保存失败…本次修改未保存）',
+        actual: 'threw=' + r.threw + '；error=' + describeError(r.error),
+        evidence: 'services/medicineService.ts:271-285 localWrite 捕获 setItem 异常后 notifyStorageError + throw new Error(WRITE_FAIL_MSG)'
+          + '（首轮验收修复项：旧实现只广播事件、不向上抛）。'
           + '同步观测：主键内容是否变化=' + (rawBefore === rawAfter ? '否（本次修改未落盘，数据丢失）' : '是')
           + '；mb:storage-error 事件数=' + events.length + (events.length ? '（' + j(events) + '）' : '')
           + (extra ? '；' + extra : ''),
-        severity: '中（浏览器里 UI 还能靠 mb:storage-error 事件提示用户；但服务层的返回值/异常通道没有失败信号，'
-          + '任何非 UI 调用方（脚本、测试、非浏览器宿主）都会认为保存成功）',
       });
-      return '调用方无法感知失败';
+      return '写失败已抛错，调用方可见';
     });
   }
   await writeFailureCase('F1', 'setItem 抛 QuotaExceededError：addMedicine 不得静默成功',
@@ -886,10 +899,9 @@ async function main() {
     check(r.threw || storageEvents.length > 0, {
       expected: '即使没有 window，也应通过异常/返回值让调用方感知',
       actual: '未抛错（返回 ' + j(r.value) + '）且零事件；数据未落库（药品数 ' + rawMedicines().length + '）',
-      evidence: 'services/medicineService.ts:55 typeof window !== "undefined" 判空后直接跳过通知',
-      severity: '中（非浏览器宿主，如本项目 scripts/ 下的 node 脚本、SSR、测试环境：写失败 = 完全静默的数据丢失）',
+      evidence: 'services/medicineService.ts:283 无 window 时也照样 throw（首轮验收修复项：旧实现仅靠 window 事件通知，非浏览器宿主会静默丢数据）',
     });
-    return '完全静默';
+    return '无 window 也抛错，不再静默';
   });
 
   // ----------------------------------------------------------
@@ -1025,7 +1037,7 @@ async function main() {
     }
     return bad.length + ' 种非法日期全部置空';
   });
-  await run('H3', '正则通过但日历上不存在的日期（2024-13-45）也应被清洗', async () => {
+  await run('H3', '形状合法但日历上不存在的日期（2024-13-45 等 4 例）应被清洗为空串', async () => {
     seedDB();
     await S.importData(j({ medicines: [Object.assign(canon(makeMed({ id: 'H3-1' })), { expiry_date: '2024-13-45', last_purchase_date: '2025-02-30' })] }), 'replace');
     const m1 = (await S.getMedicines())[0];
@@ -1035,12 +1047,10 @@ async function main() {
     check(bad.every(([, v]) => v === ''), {
       expected: 'expiry_date="" 且 last_purchase_date=""',
       actual: bad.map(([i, v]) => i + ' → ' + j(v)).join(' | '),
-      evidence: 'services/medicineService.ts:859 DATE_RE 只校验形状（4-2-2 位数字）不校验取值范围。'
-        + '最小复现：importData 一条 expiry_date="2024-13-45" 的备份 → 该值被原样存库，'
-        + '因字典序极大而永远不会被判过期（:448）也不会进补货清单',
-      severity: '低-中（备份投毒/旧版脏数据可绕过日期清洗）',
+      evidence: 'services/medicineService.ts:974-986 isValidCalendarDate（年份 1900-2999 + 闰年 + 每月天数）。'
+        + '首轮验收修复项：旧实现只有 DATE_RE 形状校验，"2024-13-45" 会被原样存库且因字典序极大永不过期',
     });
-    return '非法日历日期未清洗';
+    return '4 例非法日历日期全部清洗为空串';
   });
   await run('H4', 'image_url 白名单：仅 data:image/ 与 http(s) 保留，其余丢弃', async () => {
     seedDB();
@@ -1171,31 +1181,36 @@ async function main() {
     check(m.total_quantity >= 0, {
       expected: 'total_quantity >= 0（拒绝或 clamp）',
       actual: 'total_quantity=' + j(m.total_quantity),
-      evidence: 'services/medicineService.ts:252-255 num() 只判 Number.isFinite，负数原样放行；sanitizeMedicine:896 直接采用。'
-        + '最小复现：importData({"medicines":[{"id":"x","name":"y","total_quantity":-50}]}) → 读回 total_quantity=-50',
-      severity: '中（与 restockMedicine:701 / consumeMedicine:563 的数量防御不对称，负数库存可持久化）',
+      evidence: 'services/medicineService.ts:306 nonNegNum + 1019-1028 sanitizeMedicine（首轮验收修复项：旧实现 num() 只判 isFinite，负数原样落库）',
     });
-    return '负库存可被导入';
+    return '负库存被兜底为 0';
   });
 
   // ----------------------------------------------------------
   line('');
   line('--- I. 时区（TZ 子进程 + 假时钟，固定时刻 2026-03-01T20:30:00Z）---');
   // ----------------------------------------------------------
-  const TZS = ['Asia/Shanghai', 'America/New_York', 'UTC', 'Pacific/Kiritimati', 'Pacific/Midway'];
-  const tzResults = {};
-  const tzErrors = [];
-  for (const tz of TZS) {
-    const cp = spawnSync(process.execPath, [__filename, TZ_CHILD_FLAG, tz], {
+  /** 在指定时区 + 指定固定时刻下跑一个子进程，拿回该时刻的服务层行为快照 */
+  function runTzChild(tz, instant) {
+    const args = [__filename, TZ_CHILD_FLAG, tz];
+    if (instant) args.push(instant);
+    const cp = spawnSync(process.execPath, args, {
       cwd: PROJECT_ROOT, encoding: 'utf8',
       env: Object.assign({}, process.env, { TZ: tz, MB_BUNDLE: bundlePath }),
     });
     const marker = String(cp.stdout || '').split(/\r?\n/).find(l => l.startsWith('__TZ_JSON__'));
     if (!marker) {
-      tzErrors.push(tz + ': 无结果(exit=' + cp.status + ') ' + String(cp.stderr || '').slice(0, 300));
-      continue;
+      return { error: tz + '@' + (instant || '默认时刻') + ': 子进程无结果(exit=' + cp.status + ') ' + String(cp.stderr || '').slice(0, 300) };
     }
-    tzResults[tz] = JSON.parse(marker.slice('__TZ_JSON__'.length));
+    return JSON.parse(marker.slice('__TZ_JSON__'.length));
+  }
+  const TZS = ['Asia/Shanghai', 'America/New_York', 'UTC', 'Pacific/Kiritimati', 'Pacific/Midway'];
+  const tzResults = {};
+  const tzErrors = [];
+  for (const tz of TZS) {
+    const tr = runTzChild(tz);
+    if (tr.error) tzErrors.push(tr.error);
+    else tzResults[tz] = tr;
   }
   await run('I0', '五个时区子进程均正常返回结果（TZ 环境变量生效）', () => {
     check(tzErrors.length === 0 && Object.keys(tzResults).length === TZS.length, {
@@ -1286,6 +1301,79 @@ async function main() {
 
   // ----------------------------------------------------------
   line('');
+  line('--- TM. 时间与日期边界（假时钟固定时刻 × 时区）---');
+  // ----------------------------------------------------------
+  // 每例 5 条断言：本地日期 / 过期判定 / 入库写入日期 / 打卡 log_time / 排序
+  const TM_CASES = [
+    ['TM1', 'Asia/Shanghai', '2026-01-31T15:59:00.000Z', false, '月末 01-31 23:59（东八区）'],
+    ['TM2', 'Asia/Shanghai', '2026-12-31T15:59:00.000Z', false, '年末 12-31 23:59（东八区）'],
+    ['TM3', 'Asia/Shanghai', '2024-02-29T15:59:00.000Z', false, '闰年 2024-02-29 23:59（东八区）'],
+    ['TM4', 'Asia/Shanghai', '2024-03-01T15:59:00.000Z', false, '平年 2024-03-01 23:59（东八区）'],
+    ['TM5', 'Asia/Shanghai', '2024-12-31T16:01:00.000Z', true, '跨年 2025-01-01 00:01（东八区，UTC 仍是 12-31）'],
+    ['TM6', 'America/New_York', '2026-03-01T04:30:00.000Z', true, '纽约 2026-02-28 23:30（UTC 已是 03-01）'],
+  ];
+  const tmResults = {};
+  for (const c of TM_CASES) tmResults[c[0]] = runTzChild(c[1], c[2]);
+  for (const [id, tz, instant, crossDay, label] of TM_CASES) {
+    const tr = tmResults[id];
+    const bad = () => { throw new TestFailure({ expected: '子进程返回该时刻的行为快照', actual: tr.error || '(空)', evidence: tz + ' @ ' + instant }); };
+    await run(id + 'a', label + '：todayDateString 取该时区的本地日期', () => {
+      if (tr.error) bad();
+      check(tr.resolvedTimeZone === tz && tr.todayDateString === tr.expectedLocalToday, {
+        expected: 'tz=' + tz + ' 本地日期=' + tr.expectedLocalToday,
+        actual: 'tz=' + tr.resolvedTimeZone + ' todayDateString=' + tr.todayDateString,
+        evidence: 'services/medicineService.ts:28-36 localDateString（本地 getFullYear/getMonth/getDate）',
+      });
+      if (crossDay) {
+        check(tr.utcDate !== tr.todayDateString, {
+          expected: '跨日场景：UTC 日期 ≠ 本地日期（证明该场景真的能区分两种实现）',
+          actual: 'utc=' + tr.utcDate + ' local=' + tr.todayDateString,
+          evidence: '若用 new Date().toISOString().slice(0,10) 会得到 ' + tr.utcDate,
+        });
+      }
+      return '本地 ' + tr.todayDateString + ' / UTC ' + tr.utcDate;
+    });
+    await run(id + 'b', label + '：过期判定按本地日期（仅「昨天过期药」进补货清单）', () => {
+      if (tr.error) bad();
+      const names = tr.expiryBoundary.expiredNames;
+      check(names.length === 1 && names[0] === '昨天过期药', {
+        expected: '过期集合 = [昨天过期药]（今天/明天到期均不算）',
+        actual: j(names) + '（本地今天=' + tr.expiryBoundary.today + ' 昨天=' + tr.expiryBoundary.yesterday + ' 明天=' + tr.expiryBoundary.tomorrow + '）',
+        evidence: 'services/medicineService.ts:499-527 本地日期字符串字典序比较',
+      });
+      return '今天/明天不算过期，昨天算过期';
+    });
+    await run(id + 'c', label + '：入库写入的 last_purchase_date = 本地今天', () => {
+      if (tr.error) bad();
+      check(tr.writtenLastPurchase === tr.expectedLocalToday, {
+        expected: 'last_purchase_date = ' + tr.expectedLocalToday,
+        actual: j(tr.writtenLastPurchase) + '（UTC 日期=' + tr.utcDate + '）',
+        evidence: 'services/medicineService.ts:718/725 均走 todayDateString()',
+      });
+      return '写入 ' + tr.writtenLastPurchase;
+    });
+    await run(id + 'd', label + '：打卡 log_time 精确等于假时钟时刻（不随时区漂移）', () => {
+      if (tr.error) bad();
+      check(tr.logCount === 1 && tr.consumeLogTime === tr.instant, {
+        expected: 'log_time = ' + tr.instant,
+        actual: 'logs=' + tr.logCount + ' log_time=' + j(tr.consumeLogTime),
+        evidence: 'services/medicineService.ts:643-651 new Date().toISOString()（瞬时时间，与时区无关）',
+      });
+      return 'log_time=' + tr.consumeLogTime;
+    });
+    await run(id + 'e', label + '：排序不随 UTC 偏移错乱', () => {
+      if (tr.error) bad();
+      check(j(tr.sortedOrder) === j(['b', 'a', 'd', 'c']), {
+        expected: j(['b', 'a', 'd', 'c']) + '（06-30 > 01-15 > 2025-03-01，a/d 同日期保持稳定）',
+        actual: j(tr.sortedOrder) + '（UTC 偏移 ' + tr.parseOffsets.offsetMinutes + ' 分钟）',
+        evidence: 'services/medicineService.ts:613-623 new Date(last_purchase_date).getTime() 两侧同为 UTC 解析',
+      });
+      return '顺序一致，偏移 ' + tr.parseOffsets.offsetMinutes + 'min';
+    });
+  }
+
+  // ----------------------------------------------------------
+  line('');
   line('--- J. 同名不同品牌 ---');
   // ----------------------------------------------------------
   const NAME_J = '布洛芬缓释胶囊';
@@ -1327,9 +1415,7 @@ async function main() {
     check(after.length === 1 && before.length === 1, {
       expected: '删除 B 后，A（仍已过期）的补货条目保留 1 条',
       actual: '删除前 ' + before.length + ' 条 → 删除后 ' + after.length + ' 条（A 仍过期）',
-      evidence: 'services/medicineService.ts:685-689 按 item.medicine_name === target.name 清理，未区分品牌。'
-        + '最小复现：seed 两条同名(' + NAME_J + ')不同品牌记录[A 已过期, B 未过期] → getMedicines 生成提醒 → deleteMedicine(B) → 提醒一并被删',
-      severity: '中（瞬时误伤：提醒丢失；下次 getMedicines 会因 A 仍过期而重建，非永久丢失）',
+      evidence: 'services/medicineService.ts:774-782 带 medicine_id 的条目按 id 精确清理（首轮验收修复项：旧实现按药名一律删除，会误删另一品牌的提醒）',
     });
     check(meds.some(m => m.id === 'J-a'), { expected: 'J-a 仍在库中', actual: j(meds.map(m => m.id)) });
     return 'A 的记录本身未被删除';
@@ -1349,11 +1435,10 @@ async function main() {
     check(a.total_quantity === 3 && b.total_quantity === 20, {
       expected: 'J-a（芬必得）库存保持 3；J-b（中美史克）0→20',
       actual: 'J-a=' + a.total_quantity + '（效期 ' + a.expiry_date + '，最近购入 ' + a.last_purchase_date + '） J-b=' + b.total_quantity + '（效期 ' + b.expiry_date + '）',
-      evidence: 'services/medicineService.ts:709 findIndex(m => m.name === targetItem.medicine_name) 只按药名定位，命中数组第一条 J-a。'
-        + '最小复现：seed [A 品牌芬必得 库存3 未过期, B 品牌中美史克 库存0 已过期] → getMedicines → restockMedicine(条目, 20) → 20 被写进 A',
-      severity: '中（补货入库写错记录：另一品牌的数量/效期被覆盖，真正缺货的品牌仍为 0）',
+      evidence: 'services/medicineService.ts:129-148 findMedicineForItem（按 medicine_id → brand → 最需补货兜底），'
+        + '首轮验收修复项：旧实现 findIndex(m => m.name === item.medicine_name) 会把库存写进同名的另一条记录',
     });
-    return '核销目标错误';
+    return '核销命中正确记录';
   });
   await run('J5', '提醒粒度：同名两条各自持有提醒，核销只影响被补货的那条', async () => {
     seedDB({
@@ -1383,6 +1468,753 @@ async function main() {
 
   // ----------------------------------------------------------
   line('');
+  line('--- NB. 同名不同品牌完整矩阵（阿莫西林：华北制药 24 未过期 / 珠海联邦 16 已过期）---');
+  // ----------------------------------------------------------
+  const NB_NAME = '阿莫西林';
+  function nbSeed(both) {
+    seedDB({
+      medicines: [
+        makeMed({ id: 'NB-huabei', name: NB_NAME, brand: '华北制药', total_quantity: 24, expiry_date: both ? shiftToday(-2) : '2099-01-01' }),
+        makeMed({ id: 'NB-zhuhai', name: NB_NAME, brand: '珠海联邦', total_quantity: 16, expiry_date: shiftToday(-1) }),
+      ],
+      shoppingList: [], logs: [],
+    }, 'migrated');
+  }
+  const nbMed = (meds, id) => meds.find(m => m.id === id);
+  await run('NB1', '补货条目带 medicine_id + brand（按「这一条药品」而非按药名去重的结构前提）', async () => {
+    nbSeed(false);
+    await S.getMedicines();
+    const list = await S.getShoppingList();
+    const it = list[0] || {};
+    check(list.length === 1 && it.medicine_id === 'NB-zhuhai' && it.brand === '珠海联邦', {
+      expected: "仅珠海联邦（已过期）1 条，且 medicine_id='NB-zhuhai' brand='珠海联邦'",
+      actual: list.length + ' 条；' + j(list.map(i => ({ n: i.medicine_name, b: i.brand, mid: i.medicine_id }))),
+      evidence: 'types.ts:59-67 ShoppingItem 新增 brand/medicine_id；services/medicineService.ts:512-520 生成条目时写入归属',
+    });
+    return '未过期的华北制药不产生提醒，归属精确到 id';
+  });
+  await run('NB2', '过期去重按 medicine_id：两品牌各持一条提醒', async () => {
+    nbSeed(true);
+    await S.getMedicines();
+    const list = await S.getShoppingList();
+    const ids = list.map(i => String(i.medicine_id)).sort();
+    check(list.length === 2 && j(ids) === j(['NB-huabei', 'NB-zhuhai']), {
+      expected: '2 条提醒，medicine_id = [NB-huabei, NB-zhuhai]',
+      actual: list.length + ' 条，medicine_id=' + j(list.map(i => i.medicine_id)),
+      evidence: 'services/medicineService.ts:508-510 用 isItemForMedicine(item, med) 精确去重（旧实现按药名去重 → 两条共用一个条目）',
+    });
+    return '同名不同品牌各自成条';
+  });
+  await run('NB3', '过期检测重复触发 5 次：条目数仍为 2（按 id 幂等）', async () => {
+    nbSeed(true);
+    for (let i = 0; i < 5; i++) await S.getMedicines();
+    await S.checkExpiry();
+    const list = await S.getShoppingList();
+    check(list.length === 2, {
+      expected: '6 次触发后仍 2 条',
+      actual: list.length + ' 条: ' + j(list.map(i => i.medicine_id)),
+      evidence: 'services/medicineService.ts:499-527 addExpiredToShoppingList 去重',
+    });
+    return '幂等';
+  });
+  await run('NB4', '补货核销精确命中珠海联邦（16→20，效期/最近购入刷新）', async () => {
+    nbSeed(true);
+    await S.getMedicines();
+    const item = (await S.getShoppingList()).find(i => String(i.medicine_id) === 'NB-zhuhai');
+    await S.restockMedicine(item.id, 20, '2030-01-01');
+    const zh = nbMed(await S.getMedicines(), 'NB-zhuhai');
+    check(zh.total_quantity === 20 && zh.expiry_date === '2030-01-01' && zh.last_purchase_date === todayLocal(), {
+      expected: '珠海联邦 数量=20 效期=2030-01-01 最近购入=' + todayLocal(),
+      actual: '数量=' + zh.total_quantity + ' 效期=' + zh.expiry_date + ' 最近购入=' + zh.last_purchase_date,
+      evidence: 'services/medicineService.ts:803 findMedicineForItem（按 medicine_id 命中；旧实现按药名取首条 → 写进华北制药）',
+    });
+    return '核销命中正确记录';
+  });
+  await run('NB5', '补货核销不误伤另一品牌：华北制药库存 24 / 效期 2099-01-01 不变', async () => {
+    nbSeed(true);
+    await S.getMedicines();
+    const item = (await S.getShoppingList()).find(i => String(i.medicine_id) === 'NB-zhuhai');
+    await S.restockMedicine(item.id, 20, '2030-01-01');
+    const hb = nbMed(await S.getMedicines(), 'NB-huabei');
+    check(hb.total_quantity === 24 && hb.expiry_date === shiftToday(-2), {
+      expected: '华北制药 数量=24 效期=' + shiftToday(-2) + '（原样）',
+      actual: '数量=' + hb.total_quantity + ' 效期=' + hb.expiry_date,
+      evidence: 'services/medicineService.ts:129-148 findMedicineForItem；旧实现 findIndex(m => m.name === ...) 会改错记录',
+    });
+    return '另一品牌零影响';
+  });
+  await run('NB6', '入库同品牌（华北制药 +10）：合并该条、保留原 id，不动珠海联邦', async () => {
+    nbSeed(false);
+    await S.getMedicines();
+    const r = await S.addMedicine(makeMed({ id: 'NB-new-hb', name: NB_NAME, brand: '华北制药', total_quantity: 34, expiry_date: '2099-01-01' }));
+    const meds = await S.getMedicines();
+    const hb = nbMed(meds, 'NB-huabei'), zh = nbMed(meds, 'NB-zhuhai');
+    check(r.merged === true && meds.length === 2 && hb.total_quantity === 34 && zh.total_quantity === 16, {
+      expected: 'merged=true、仍 2 条、华北=34、珠海=16',
+      actual: 'merged=' + r.merged + ' 条数=' + meds.length + ' 华北=' + hb.total_quantity + ' 珠海=' + zh.total_quantity,
+      evidence: 'services/medicineService.ts:204-213 isSameMedicineIdentity 含 brand',
+    });
+    return '同品牌合并、异品牌独立';
+  });
+  await run('NB7', '入库异品牌（珠海联邦 +10）：只更新珠海联邦，华北制药保持 24', async () => {
+    nbSeed(false);
+    await S.getMedicines();
+    const r = await S.addMedicine(makeMed({ id: 'NB-new-zh', name: NB_NAME, brand: '珠海联邦', total_quantity: 26, expiry_date: '2030-05-05' }));
+    const meds = await S.getMedicines();
+    const hb = nbMed(meds, 'NB-huabei'), zh = nbMed(meds, 'NB-zhuhai');
+    check(meds.length === 2 && zh.id === 'NB-zhuhai' && zh.total_quantity === 26 && hb.total_quantity === 24 && hb.expiry_date === '2099-01-01', {
+      expected: '珠海=26（原 id）、华北=24/2099-01-01 不变',
+      actual: '条数=' + meds.length + ' 珠海=' + zh.total_quantity + '/' + zh.id + ' 华北=' + hb.total_quantity + '/' + hb.expiry_date,
+      evidence: 'services/medicineService.ts:705-727 按下标定位合并；merged=' + r.merged,
+    });
+    return '异品牌不互相覆盖';
+  });
+  await run('NB8', '打卡按 id 扣减：珠海联邦 16→12，华北制药 24 不变', async () => {
+    nbSeed(false);
+    await S.getMedicines();
+    await S.consumeMedicine('NB-zhuhai', 4);
+    const meds = await S.getMedicines();
+    const logs = await S.getUsageLogs();
+    check(nbMed(meds, 'NB-zhuhai').total_quantity === 12 && nbMed(meds, 'NB-huabei').total_quantity === 24, {
+      expected: '珠海=12 华北=24',
+      actual: '珠海=' + nbMed(meds, 'NB-zhuhai').total_quantity + ' 华北=' + nbMed(meds, 'NB-huabei').total_quantity,
+      evidence: 'services/medicineService.ts:641-651 按 id 定位 + 日志带 brand 快照',
+    });
+    check(logs.length === 1 && logs[0].brand === '珠海联邦' && logs[0].medicine_id === 'NB-zhuhai', {
+      expected: "日志 brand='珠海联邦' medicine_id='NB-zhuhai'",
+      actual: j(logs.map(l => ({ b: l.brand, mid: l.medicine_id }))),
+    });
+    return '按 id 扣减、日志品牌快照正确';
+  });
+  await run('NB9', '删除华北制药只清自己那条提醒，珠海联邦的提醒保留', async () => {
+    nbSeed(true);
+    await S.getMedicines();
+    const before = await S.getShoppingList();
+    await S.deleteMedicine('NB-huabei');
+    const after = await S.getShoppingList();
+    check(before.length === 2 && after.length === 1 && String(after[0].medicine_id) === 'NB-zhuhai', {
+      expected: '删除前 2 条 → 删除后仅剩珠海联邦 1 条',
+      actual: '删除前 ' + before.length + ' 条 → 删除后 ' + after.length + ' 条: ' + j(after.map(i => i.medicine_id)),
+      evidence: 'services/medicineService.ts:774-782 按 medicine_id 清理（旧实现按药名一律删 → 另一品牌提醒被误删）',
+    });
+    return '只清自己的提醒';
+  });
+  await run('NB10', '删除后无孤儿条目：剩余条目都能对应到现存药品', async () => {
+    nbSeed(true);
+    await S.getMedicines();
+    await S.deleteMedicine('NB-huabei');
+    const meds = (readRawDB() || {}).medicines || [];
+    const list = await S.getShoppingList();
+    const orphans = list.filter(i => !meds.some(m => String(m.id) === String(i.medicine_id)));
+    check(orphans.length === 0, {
+      expected: '0 条孤儿',
+      actual: orphans.length + ' 条: ' + j(orphans.map(i => ({ n: i.medicine_name, mid: i.medicine_id }))),
+      evidence: '对照 services/medicineService.ts:775-782 的清理分支',
+    });
+    return '清单与药箱一致';
+  });
+
+  // ----------------------------------------------------------
+  line('');
+  line('--- EX. 输入与清洗极端值 ---');
+  // ----------------------------------------------------------
+  const EX_LONG = '药'.repeat(100000);
+  async function exAdd(name, id) {
+    seedDB();
+    const r = await mustThrow(() => S.addMedicine(makeMed({ id: id, name: name, total_quantity: 5 })));
+    return r;
+  }
+  await run('EX1', '10 万字符名称：入库不报错、完整落库、可导出', async () => {
+    const r = await exAdd(EX_LONG, 'EX-1');
+    check(!r.threw, { expected: '不抛错', actual: describeError(r.error), evidence: 'services/medicineService.ts:697-703 只校验数量' });
+    const stored = rawMedicines()[0];
+    check(stored.name === EX_LONG && stored.name.length === 100000, {
+      expected: 'name 长度 100000 且内容一致',
+      actual: '长度 ' + String(stored.name).length + '，内容一致=' + (stored.name === EX_LONG),
+    });
+    const exported = JSON.parse(await S.exportData()).data.medicines[0];
+    check(exported.name.length === 100000, { expected: '导出同样保留完整名称', actual: '导出后长度 ' + exported.name.length });
+    return '100000 字符名称无损往返';
+  });
+  await run('EX2', 'emoji 名称：原样落库（代理对不被截断）', async () => {
+    const r = await exAdd('💊🩹😀 复方', 'EX-2');
+    const stored = rawMedicines()[0];
+    check(!r.threw && stored.name === '💊🩹😀 复方' && stored.name.length === '💊🩹😀 复方'.length, {
+      expected: 'name 与输入完全一致',
+      actual: describeError(r.error) + ' / name=' + j(stored.name),
+    });
+    return '代理对完整';
+  });
+  await run('EX3', '控制字符名称：JSON 往返合法、不报错', async () => {
+    const weird = 'a\u0000b\u0001c\u001F';
+    const r = await exAdd(weird, 'EX-3');
+    const stored = rawMedicines()[0];
+    check(!r.threw && stored.name === weird, {
+      expected: '含 NUL/SOH/US 的名称原样落库',
+      actual: describeError(r.error) + ' / name 长度=' + String(stored.name).length,
+    });
+    return '控制字符不影响存储';
+  });
+  await run('EX4', '全角数字名称：原样落库', async () => {
+    const r = await exAdd('１２３４５', 'EX-4');
+    const stored = rawMedicines()[0];
+    check(!r.threw && stored.name === '１２３４５', { expected: 'name=１２３４５', actual: j(stored.name) });
+    return '全角字符不受影响';
+  });
+  await run('EX5', '名称边界：纯空格 / 零宽字符(\u200B) 名称应被拒绝或规范化', async () => {
+    seedDB();
+    const r1 = await mustThrow(() => S.addMedicine(makeMed({ id: 'EX-5a', name: '   ', total_quantity: 1 })));
+    seedDB();
+    const r2 = await mustThrow(() => S.addMedicine(makeMed({ id: 'EX-5b', name: '\u200B\u200B', total_quantity: 1 })));
+    seedDB();
+    const r3 = await mustThrow(() => S.importData(j({ medicines: [Object.assign(canon(makeMed({ id: 'EX-5c' })), { name: '\u200B\u200B' })] }), 'replace'));
+    const imported = rawMedicines();
+    check(r1.threw && r2.threw && r3.threw, {
+      expected: '空白/零宽名称一律拒绝（addMedicine 与 importData 两条通道都拒绝）',
+      actual: 'addMedicine("   ") threw=' + r1.threw + '；addMedicine("\\u200B\\u200B") threw=' + r2.threw
+        + '；importData(name="\\u200B\\u200B") threw=' + r3.threw + ' 且落库 ' + imported.length + ' 条',
+      evidence: 'services/medicineService.ts:692-703 addMedicine 不校验名称；:1004 trim() 只去空白类字符、去不掉 \\u200B（零宽空格），'
+        + '而 importData 的纯空格名会被 trim 成空串后丢弃（:1005）。最小复现：addMedicine({name:"   "}) → 落库 name="   "',
+      severity: '低（UI 表单已校验非空；影响面是脚本/备份投毒产生的空白名条目）',
+    });
+    return '空白名被拒绝';
+  });
+  await run('EX6', '数量 1e309（Infinity）：拒绝入库', async () => {
+    seedDB();
+    // 用 Number('1e309') 而不是字面量 1e309：后者会被 eslint no-loss-of-precision 判为精度丢失
+    const r = await mustThrow(() => S.addMedicine(makeMed({ id: 'EX-6', name: '无穷药', total_quantity: Number('1e309') })));
+    check(r.threw && rawMedicines().length === 0, {
+      expected: '抛错「入库数量必须为不小于 0 的数字」且不落库',
+      actual: 'threw=' + r.threw + '；落库 ' + rawMedicines().length + ' 条',
+      evidence: 'services/medicineService.ts:696-700 Number.isFinite 防御；旧实现会写成 Infinity，JSON 序列化后退化成 null',
+    });
+    return describeError(r.error);
+  });
+  await run('EX7', '数量 -1：拒绝入库', async () => {
+    seedDB();
+    const r = await mustThrow(() => S.addMedicine(makeMed({ id: 'EX-7', name: '负药', total_quantity: -1 })));
+    check(r.threw && rawMedicines().length === 0, {
+      expected: '抛错且不落库', actual: 'threw=' + r.threw + '；落库 ' + rawMedicines().length + ' 条',
+      evidence: 'services/medicineService.ts:696-700',
+    });
+    return describeError(r.error);
+  });
+  await run('EX8', '数量 -0：落库为 0（有限非负）', async () => {
+    seedDB();
+    const r = await mustThrow(() => S.addMedicine(makeMed({ id: 'EX-8', name: '负零药', total_quantity: -0 })));
+    const q = rawMedicines()[0] && rawMedicines()[0].total_quantity;
+    check(!r.threw && q === 0 && Number.isFinite(q) && q >= 0, {
+      expected: 'total_quantity === 0', actual: 'threw=' + r.threw + ' 落库=' + j(q),
+      evidence: 'services/medicineService.ts:696-700（-0 < 0 为 false）→ JSON.stringify(-0) === "0"',
+    });
+    return '落库 0';
+  });
+  await run('EX9', '数量 0.1：有限非负（记录：小数库存未被拒绝）', async () => {
+    seedDB();
+    const r = await mustThrow(() => S.addMedicine(makeMed({ id: 'EX-9', name: '小数药', total_quantity: 0.1 })));
+    const q = rawMedicines()[0] && rawMedicines()[0].total_quantity;
+    check(!r.threw && q === 0.1 && Number.isFinite(q) && q >= 0, {
+      expected: 'total_quantity === 0.1', actual: 'threw=' + r.threw + ' 落库=' + j(q),
+      evidence: 'services/medicineService.ts:696-700 未做整数化；服务层允许小数库存（UI 负责取整）',
+    });
+    return '落库 0.1（非整数但有限非负）';
+  });
+  await run('EX10', '数量 2^53：有限非负落库', async () => {
+    seedDB();
+    const big = Math.pow(2, 53);
+    const r = await mustThrow(() => S.addMedicine(makeMed({ id: 'EX-10', name: '超大药', total_quantity: big })));
+    const q = rawMedicines()[0] && rawMedicines()[0].total_quantity;
+    check(!r.threw && q === big && Number.isFinite(q) && q >= 0, {
+      expected: 'total_quantity === ' + big, actual: 'threw=' + r.threw + ' 落库=' + j(q),
+    });
+    return '落库 ' + big;
+  });
+  await run('EX11', 'threshold 为 Infinity：拒绝入库（避免阈值比较恒真）', async () => {
+    seedDB();
+    const r = await mustThrow(() => S.addMedicine(makeMed({ id: 'EX-11', name: '阈值药', total_quantity: 1, threshold: Infinity })));
+    check(r.threw && rawMedicines().length === 0, {
+      expected: '抛错「预警阈值必须为数字」且不落库',
+      actual: 'threw=' + r.threw + '；落库 ' + rawMedicines().length + ' 条',
+      evidence: 'services/medicineService.ts:701-703',
+    });
+    return describeError(r.error);
+  });
+  await run('EX12', '导入通道数值清洗：-50 / Infinity / "abc" / null → 一律兜底 0', async () => {
+    const cases = [-50, Infinity, -Infinity, 'abc', null, {}, []];
+    const bad = [];
+    for (const v of cases) {
+      seedDB();
+      await S.importData(j({ medicines: [Object.assign(canon(makeMed({ id: 'EX-12' })), { total_quantity: v, threshold: v, daily_usage: v, usage_frequency_score: v })] }), 'replace');
+      const m = rawMedicines()[0];
+      for (const f of ['total_quantity', 'threshold', 'daily_usage', 'usage_frequency_score']) {
+        if (!(m[f] === 0)) bad.push(j(v) + '.' + f + '=' + j(m[f]));
+      }
+    }
+    check(bad.length === 0, {
+      expected: '7 组输入 × 4 字段全部兜底为 0',
+      actual: bad.join(' | ') || '(全部为 0)',
+      evidence: 'services/medicineService.ts:306 nonNegNum() + 1019-1028 sanitizeMedicine',
+    });
+    return '非负兜底生效（负数/Infinity/NaN 不会进库）';
+  });
+  await run('EX13', '导入通道：日志 amount 为负数应被拒绝或兜底为 0', async () => {
+    seedDB();
+    await S.importData(j({
+      medicines: [canon(makeMed({ id: 'EX-13' }))],
+      logs: [{ id: 'EX-13l', medicine_id: 'EX-13', medicine_name: '阿莫西林胶囊', amount: -5, log_time: '2026-01-01T00:00:00.000Z' }],
+    }), 'replace');
+    const l = (await S.getUsageLogs())[0];
+    check(l && l.amount >= 0, {
+      expected: 'amount >= 0（拒绝该条或兜底 0）',
+      actual: 'amount=' + j(l && l.amount),
+      evidence: 'services/medicineService.ts:1047 sanitizeLog 用 num()（只判 isFinite）而非 nonNegNum()（:306）；'
+        + '最小复现：importData 一条 amount=-5 的日志 → 读回 amount=-5（负数用量会污染「累计消耗」类统计）',
+      severity: '低-中（sanitizeMedicine 已用 nonNegNum 兜底，日志通道未同步）',
+    });
+    return '负数量日志被兜底';
+  });
+
+  // ----------------------------------------------------------
+  line('');
+  line('--- VR. 备份版本校验矩阵 ---');
+  // ----------------------------------------------------------
+  function vrPayload(version) {
+    const p = {
+      app: 'medicine-box',
+      exported_at: '2026-01-01T00:00:00.000Z',
+      counts: { medicines: 1, shoppingList: 0, logs: 0 },
+      data: { medicines: [canon(makeMed({ id: 'VR-new', name: '版本药' }))], shoppingList: [], logs: [] },
+    };
+    if (version !== undefined) p.version = version;
+    return j(p);
+  }
+  const VR_CASES = [
+    ['VR1', undefined, true, 'version 缺失（旧备份兼容）'],
+    ['VR2', 0, false, 'version=0'],
+    ['VR3', 1, true, 'version=1（当前版本）'],
+    ['VR4', 2, false, 'version=2（未来版本）'],
+    ['VR5', 999, false, 'version=999'],
+    ['VR6', '1', true, 'version="1"（字符串）'],
+    ['VR7', null, false, 'version=null'],
+  ];
+  const vrRejects = [];
+  for (const [id, ver, accept, label] of VR_CASES) {
+    await run(id, '版本校验：' + label + (accept ? ' → 接受' : ' → 拒绝'), async () => {
+      seedDB({ medicines: [makeMed({ id: 'VR-old', name: '原有药' })], shoppingList: [makeItem({ id: 'VR-old-item', medicine_name: '原有药' })], logs: [] }, 'migrated');
+      const before = JSON.stringify(storage.dump());
+      const r = await mustThrow(() => S.importData(vrPayload(ver), 'replace'));
+      const after = JSON.stringify(storage.dump());
+      if (accept) {
+        const meds = (readRawDB() || {}).medicines || [];
+        check(!r.threw && meds.some(m => m.id === 'VR-new'), {
+          expected: '接受导入 → 库内出现 VR-new',
+          actual: 'threw=' + r.threw + (r.threw ? '(' + describeError(r.error) + ')' : '') + '；药品=' + j(meds.map(m => m.id)),
+          evidence: 'services/medicineService.ts:874-883 只有声明了 version 且 Number(version) !== 1 才拒绝',
+        });
+      } else {
+        vrRejects.push({ id, unchanged: after === before });
+        check(r.threw && after === before, {
+          expected: '拒绝（抛错）且存储内容逐字节不变',
+          actual: 'threw=' + r.threw + (r.threw ? '（' + describeError(r.error) + '）' : '；返回值=' + j(r.value)) + '；内容一致=' + (after === before),
+          evidence: 'services/medicineService.ts:876-883 版本校验位于任何写入之前',
+        });
+      }
+      return r.threw ? '拒绝：' + describeError(r.error) : '接受';
+    });
+  }
+  await run('VR8', '版本被拒时数据一字未动（4 例逐一验证）', () => {
+    const bad = vrRejects.filter(x => !x.unchanged);
+    check(vrRejects.length === 4 && bad.length === 0, {
+      expected: '4 个被拒版本（0/2/999/null）均保持存储内容逐字节不变',
+      actual: '被拒例数=' + vrRejects.length + '；被改动的=' + j(bad.map(x => x.id)),
+      evidence: 'services/medicineService.ts:856-883 解析 → 结构校验 → 版本校验 → 之后才写库',
+    });
+    return vrRejects.map(x => x.id).join('/') + ' 均未写入';
+  });
+
+  // ----------------------------------------------------------
+  line('');
+  line('--- CD. 日历日期矩阵（导入清洗 + 补货登记校验）---');
+  // ----------------------------------------------------------
+  const CD_CASES = [
+    ['CD1', '2024-02-29', true, '闰日合法（2024 是闰年）'],
+    ['CD2', '2023-02-29', false, '2023 不是闰年'],
+    ['CD3', '2024-02-30', false, '2 月没有 30 日'],
+    ['CD4', '2024-13-01', false, '没有 13 月'],
+    ['CD5', '2024-00-10', false, '没有 0 月'],
+    ['CD6', '2024-01-32', false, '1 月没有 32 日'],
+    ['CD7', '1900-01-01', true, '合法（年份下界 1900）'],
+    ['CD8', '1899-12-31', false, '早于年份下界 1900'],
+    ['CD9', '2999-12-31', true, '合法（年份上界 2999）'],
+    ['CD10', '3000-01-01', false, '晚于年份上界 2999'],
+  ];
+  for (const [id, value, keep, why] of CD_CASES) {
+    await run(id, '日历日期 ' + value + '（' + why + '）→ ' + (keep ? '保留' : '清洗为空串'), async () => {
+      seedDB();
+      await S.importData(j({ medicines: [Object.assign(canon(makeMed({ id: 'CD-1', name: '日期药' })), { expiry_date: value, last_purchase_date: value })] }), 'replace');
+      const m = (await S.getMedicines())[0];
+      const list = await S.getShoppingList();
+      const judged = list.some(i => i.medicine_name === '日期药');
+      if (keep) {
+        check(m.expiry_date === value && m.last_purchase_date === value, {
+          expected: 'expiry/last_purchase 均保留 ' + value,
+          actual: 'expiry=' + j(m.expiry_date) + ' last_purchase=' + j(m.last_purchase_date),
+          evidence: 'services/medicineService.ts:974-986 isValidCalendarDate + date10',
+        });
+      } else {
+        check(m.expiry_date === '' && m.last_purchase_date === '', {
+          expected: 'expiry/last_purchase 均清洗为 ""',
+          actual: 'expiry=' + j(m.expiry_date) + ' last_purchase=' + j(m.last_purchase_date)
+            + '；过期判定=' + (judged ? '被判为过期' : '未被判过期'),
+          evidence: 'services/medicineService.ts:974-981 isValidCalendarDate（年份 1900-2999 + 闰年 + 月份天数）',
+        });
+      }
+      return keep ? '保留 ' + value : '清洗为空串';
+    });
+  }
+  await run('CD11', '补货登记的效期校验应与导入一致（拒绝日历上不存在的日期）', async () => {
+    seedDB({ medicines: [makeMed({ id: 'CD-11', name: '补货日期药', total_quantity: 0, expiry_date: shiftToday(-1) })], shoppingList: [], logs: [] }, 'migrated');
+    await S.getMedicines();
+    const item = (await S.getShoppingList())[0];
+    const r = await mustThrow(() => S.restockMedicine(item.id, 10, '9999-99-99'));
+    const med = (await S.getMedicines()).find(m => m.id === 'CD-11');
+    check(r.threw, {
+      expected: '拒绝「9999-99-99」这类日历上不存在的日期',
+      actual: 'threw=' + r.threw + '；落库效期=' + j(med.expiry_date) + '（库存 ' + j(med.total_quantity) + '）',
+      evidence: 'services/medicineService.ts:793-797 restockMedicine 仍只用形状正则 /^\\d{4}-\\d{2}-\\d{2}$/，未复用 isValidCalendarDate(:974)；'
+        + '最小复现：restockMedicine(itemId, 10, "9999-99-99") → 效期被写成 9999-99-99，'
+        + '该值字典序极大，永远不会被 :505 判为过期，该药从此不再进补货清单',
+      severity: '低-中（表单用 <input type="date"> 挡住常规输入，但服务层校验与导入路径不一致）',
+    });
+    return '效期校验一致';
+  });
+
+  // ----------------------------------------------------------
+  line('');
+  line('--- AM. 失败原子性（读失败 / 写失败 / 导入失败）---');
+  // ----------------------------------------------------------
+  function quotaErr() {
+    const e = new Error('QuotaExceededError: the quota has been exceeded.');
+    e.name = 'QuotaExceededError';
+    return e;
+  }
+  await run('AM1', '读失败（getItem 抛错）：存储内容逐字节一致', async () => {
+    seedDB({ medicines: [makeMed({ id: 'AM-1' })], shoppingList: [makeItem({ id: 'AM-1i' })], logs: [makeLog({ id: 'AM-1l' })] }, 'migrated');
+    const before = JSON.stringify(storage.dump());
+    storage.failReads(() => new Error('SecurityError: storage disabled'));
+    const r = await mustThrow(() => S.getMedicines());
+    storage.clearReadFailure();
+    const after = JSON.stringify(storage.dump());
+    check(r.threw && after === before, {
+      expected: '抛错且存储内容逐字节不变',
+      actual: 'threw=' + r.threw + '；内容一致=' + (after === before),
+      evidence: 'services/medicineService.ts:253-269 localRead 返回 null；:461-463 READ_FAIL_MSG',
+    });
+    return '存储 ' + before.length + ' 字节未变';
+  });
+  await run('AM2', '写失败（setItem 抛 QuotaExceededError）：存储内容逐字节一致', async () => {
+    seedDB({ medicines: [makeMed({ id: 'AM-2', name: '写失败药', total_quantity: 5 })], shoppingList: [], logs: [] }, 'migrated');
+    const before = JSON.stringify(storage.dump());
+    storage.failWrites(quotaErr);
+    const r = await mustThrow(() => S.addMedicine(makeMed({ id: 'AM-2b', name: '新药', total_quantity: 3 })));
+    storage.clearWriteFailure();
+    const after = JSON.stringify(storage.dump());
+    check(r.threw && after === before, {
+      expected: '抛错且存储内容逐字节不变（失败不产生半截写入）',
+      actual: 'threw=' + r.threw + '；内容一致=' + (after === before),
+      evidence: 'services/medicineService.ts:273-285 localWrite 先写后抛，JSON.stringify 是一次性赋值，不存在部分写入',
+    });
+    return '存储 ' + before.length + ' 字节未变';
+  });
+  await run('AM3', '写失败：变更方法的返回值不含成功语义（addMedicine / consumeMedicine）', async () => {
+    seedDB({ medicines: [makeMed({ id: 'AM-3', name: '写失败药', total_quantity: 5 })], shoppingList: [], logs: [] }, 'migrated');
+    storage.failWrites(quotaErr);
+    const r1 = await mustThrow(() => S.addMedicine(makeMed({ id: 'AM-3b', name: '新药', total_quantity: 3 })));
+    const r2 = await mustThrow(() => S.consumeMedicine('AM-3', 1));
+    storage.clearWriteFailure();
+    check(r1.threw && r2.threw, {
+      expected: '两个方法都抛错，调用方拿不到「成功」返回值',
+      actual: 'addMedicine threw=' + r1.threw + (r1.threw ? '' : ' 返回 ' + j(r1.value)) + '；consumeMedicine threw=' + r2.threw,
+      evidence: 'services/medicineService.ts:283 throw new Error(WRITE_FAIL_MSG)',
+    });
+    return describeError(r1.error);
+  });
+  await run('AM4', '读失败：读取入口抛错（绝不返回空库/空数组）', async () => {
+    seedDB({ medicines: [makeMed({ id: 'AM-4' })], shoppingList: [], logs: [] }, 'migrated');
+    storage.failReads(() => new Error('SecurityError: storage disabled'));
+    const a = await mustThrow(() => S.getMedicines());
+    const b = await mustThrow(() => S.getShoppingList());
+    const c = await mustThrow(() => S.getUsageLogs());
+    const d = await mustThrow(() => S.fetchData());
+    const e2 = await mustThrow(() => S.exportData());
+    storage.clearReadFailure();
+    const bad = [['getMedicines', a], ['getShoppingList', b], ['getUsageLogs', c], ['fetchData', d], ['exportData', e2]].filter(x => !x[1].threw);
+    check(bad.length === 0, {
+      expected: '5 个读取/导出入口全部抛错',
+      actual: bad.map(x => x[0] + ' 返回 ' + j(x[1].value)).join(' | ') || '(全部抛错)',
+      evidence: 'services/medicineService.ts:461-463 READ_FAIL_MSG；:531-537 fetchData 不再 ?? EMPTY_DB()',
+    });
+    return '读取失败语义统一';
+  });
+  await run('AM5', '导入失败（非法 JSON / 缺 medicines）：存储内容逐字节一致', async () => {
+    seedDB({ medicines: [makeMed({ id: 'AM-5', name: '原有药' })], shoppingList: [], logs: [] }, 'migrated');
+    const before = JSON.stringify(storage.dump());
+    const r1 = await mustThrow(() => S.importData('{oops', 'replace'));
+    const r2 = await mustThrow(() => S.importData(j({ shoppingList: [] }), 'merge'));
+    const r3 = await mustThrow(() => S.importData(vrPayload(999), 'replace'));
+    const after = JSON.stringify(storage.dump());
+    check(r1.threw && r2.threw && r3.threw && after === before, {
+      expected: '三种非法导入全部抛错且存储逐字节不变',
+      actual: 'threw=' + r1.threw + '/' + r2.threw + '/' + r3.threw + '；内容一致=' + (after === before),
+      evidence: 'services/medicineService.ts:857-883 三道校验都发生在 writeDB 之前',
+    });
+    return '存储 ' + before.length + ' 字节未变';
+  });
+  await run('AM6', '导入写失败：importData 抛错而不是返回成功摘要', async () => {
+    seedDB({ medicines: [makeMed({ id: 'AM-6', name: '原有药' })], shoppingList: [], logs: [] }, 'migrated');
+    const before = JSON.stringify(storage.dump());
+    storage.failWrites(quotaErr);
+    const r = await mustThrow(() => S.importData(j({ medicines: [canon(makeMed({ id: 'AM-6b', name: '导入药' }))] }), 'replace'));
+    storage.clearWriteFailure();
+    const after = JSON.stringify(storage.dump());
+    check(r.threw && after === before, {
+      expected: '抛错（不给 ImportResult 成功摘要）且存储逐字节不变',
+      actual: 'threw=' + r.threw + (r.threw ? '' : '；返回值=' + j(r.value)) + '；内容一致=' + (after === before),
+      evidence: 'services/medicineService.ts:906-908 importData replace 分支 → writeDB → localWrite 抛出',
+    });
+    return describeError(r.error);
+  });
+  await run('AM7', '损坏态下 5 个变更方法：存储内容逐字节一致（不覆盖损坏数据）', async () => {
+    const CORRUPT2 = '{"medicines":[{"id":"x",  <<< 非法 JSON';
+    const fns = [
+      ['addMedicine', () => S.addMedicine(makeMed({ id: 'AM-7a' }))],
+      ['deleteMedicine', () => S.deleteMedicine('whatever')],
+      ['consumeMedicine', () => S.consumeMedicine('whatever', 1)],
+      ['updateMedicine', () => S.updateMedicine(makeMed({ id: 'AM-7b' }))],
+      ['restockMedicine', () => S.restockMedicine('whatever', 1, '2030-01-01')],
+    ];
+    const notThrew = [];
+    const changed = [];
+    for (const [name, fn] of fns) {
+      storage.seed(CORRUPT2, 'migrated');
+      const before = JSON.stringify(storage.dump());
+      const r = await mustThrow(fn);
+      if (!r.threw) notThrew.push(name);
+      if (JSON.stringify(storage.dump()) !== before) changed.push(name);
+    }
+    check(notThrew.length === 0 && changed.length === 0, {
+      expected: '5 个方法都抛错且都不改动损坏的存储内容',
+      actual: '未抛错的=' + j(notThrew) + '；被改动的=' + j(changed),
+      evidence: 'services/medicineService.ts:253-269 localRead 返回 null → 各方法前置 if (!data) throw',
+    });
+    return '损坏数据零改动';
+  });
+
+  // ----------------------------------------------------------
+  line('');
+  line('--- ID. 幂等与重复调用 ---');
+  // ----------------------------------------------------------
+  await run('ID1', 'getMedicines() ×5：不产生重复补货条目', async () => {
+    seedDB({
+      medicines: [
+        makeMed({ id: 'ID-1a', name: '过期甲', expiry_date: shiftToday(-1) }),
+        makeMed({ id: 'ID-1b', name: '过期乙', expiry_date: shiftToday(-30) }),
+      ], shoppingList: [], logs: [],
+    }, 'migrated');
+    const counts = [];
+    for (let i = 0; i < 5; i++) { await S.getMedicines(); counts.push((await S.getShoppingList()).length); }
+    check(counts.every(c => c === 2), {
+      expected: '每次都固定 2 条', actual: j(counts),
+      evidence: 'services/medicineService.ts:499-527 去重（按 id）',
+    });
+    return '条目数稳定 ' + j(counts);
+  });
+  await run('ID2', 'getMedicines() ×5：数据逐字节稳定（首轮结算后不再变化）', async () => {
+    seedDB({
+      medicines: [makeMed({ id: 'ID-2a', name: '过期药', expiry_date: shiftToday(-1) })],
+      shoppingList: [], logs: [makeLog({ id: 'ID-2l', medicine_id: 'ID-2a', medicine_name: '过期药' })],
+    }, 'migrated');
+    await S.getMedicines();
+    const first = JSON.stringify(storage.dump());
+    for (let i = 0; i < 4; i++) await S.getMedicines();
+    const last = JSON.stringify(storage.dump());
+    check(first === last, {
+      expected: '第 2~5 次调用不再写库（内容逐字节一致）',
+      actual: '一致=' + (first === last) + (first === last ? '' : '；前=' + first.slice(0, 120) + ' 后=' + last.slice(0, 120)),
+      evidence: 'services/medicineService.ts:542-568 dirty 标记，无变更不写回',
+    });
+    return '存储 ' + first.length + ' 字节稳定';
+  });
+  await run('ID3', 'checkExpiry() ×5：幂等', async () => {
+    seedDB({
+      medicines: [makeMed({ id: 'ID-3a', name: '过期药', expiry_date: shiftToday(-5) })],
+      shoppingList: [], logs: [],
+    }, 'migrated');
+    const counts = [];
+    for (let i = 0; i < 5; i++) { await S.checkExpiry(); counts.push((await S.getShoppingList()).length); }
+    check(counts.every(c => c === 1), {
+      expected: '每次都固定 1 条', actual: j(counts),
+      evidence: 'services/medicineService.ts:673-680 checkExpiry',
+    });
+    return '条目数稳定 ' + j(counts);
+  });
+  await run('ID4', 'importData(replace) 同文件连续导入 3 次：结果逐字节一致', async () => {
+    seedDB();
+    const payload = j({
+      medicines: [canon(makeMed({ id: 'ID-4a', name: '导入药甲' })), canon(makeMed({ id: 'ID-4b', name: '导入药乙' }))],
+      shoppingList: [canon(makeItem({ id: 'ID-4i', medicine_name: '导入药甲' }))],
+      logs: [canon(makeLog({ id: 'ID-4l', medicine_id: 'ID-4a', medicine_name: '导入药甲' }))],
+    });
+    const snaps = [];
+    for (let i = 0; i < 3; i++) { await S.importData(payload, 'replace'); snaps.push(JSON.stringify(readRawDB())); }
+    check(snaps[0] === snaps[1] && snaps[1] === snaps[2], {
+      expected: '3 次导入后主键内容完全相同',
+      actual: '一致=' + (snaps[0] === snaps[1] && snaps[1] === snaps[2]) + '；长度=' + j(snaps.map(s => s.length)),
+      evidence: 'services/medicineService.ts:906-908 replace 为幂等整库覆盖',
+    });
+    return '3 次结果一致（' + snaps[0].length + ' 字节）';
+  });
+  await run('ID5', 'addMedicine 同品牌连续入库 3 次：仍只 1 条记录，数量=最后一次', async () => {
+    seedDB();
+    const qtys = [5, 9, 12];
+    for (const q of qtys) await S.addMedicine(makeMed({ id: 'ID-5-' + q, name: '重复入库药', brand: '甲厂', total_quantity: q }));
+    const meds = await S.getMedicines();
+    check(meds.length === 1 && meds[0].total_quantity === 12, {
+      expected: '1 条记录、数量=12',
+      actual: meds.length + ' 条，数量=' + meds[0].total_quantity,
+      evidence: 'services/medicineService.ts:705-727 同身份合并（保留原 id）',
+    });
+    return '合并幂等';
+  });
+
+  // ----------------------------------------------------------
+  line('');
+  line('--- BG. 大数据量（1000 药品 + 1000 日志）---');
+  // ----------------------------------------------------------
+  const BIG_N = 1000;
+  function bigDB(n) {
+    return {
+      medicines: Array.from({ length: n }, (_, i) => makeMed({
+        id: 'BIG-' + String(i).padStart(5, '0'),
+        name: '批量药' + i,
+        brand: i % 2 ? '甲厂' : '乙厂',
+        total_quantity: i % 50,
+        threshold: i % 5,
+        expiry_date: '20' + (30 + (i % 60)) + '-0' + (1 + (i % 9)) + '-1' + (i % 9),
+        last_purchase_date: '2026-0' + (1 + (i % 9)) + '-1' + (i % 9),
+        usage_frequency_score: i % 7,
+      })),
+      shoppingList: [],
+      logs: Array.from({ length: n }, (_, i) => makeLog({
+        id: 'BIGLOG-' + String(i).padStart(5, '0'),
+        medicine_id: 'BIG-' + String(i).padStart(5, '0'),
+        medicine_name: '批量药' + i,
+        amount: 1 + (i % 3),
+        log_time: new Date(Date.UTC(2026, 0, 1) + i * 3600000).toISOString(),
+      })),
+    };
+  }
+  const BIG_LIMIT_MS = 5000;
+  await run('BG1', BIG_N + ' 条药品：读取（含全量过期检测）耗时与数据完整性', async () => {
+    seedDB(bigDB(BIG_N), 'migrated');
+    const t0 = Date.now();
+    const meds = await S.getMedicines();
+    const ms = Date.now() - t0;
+    check(meds.length === BIG_N && ms < BIG_LIMIT_MS, {
+      expected: '读取 ' + BIG_N + ' 条且耗时 < ' + BIG_LIMIT_MS + 'ms',
+      actual: meds.length + ' 条，' + ms + 'ms',
+      evidence: 'services/medicineService.ts:542-568',
+    });
+    return BIG_N + ' 条 / ' + ms + 'ms';
+  });
+  await run('BG2', BIG_N + ' 条药品：单次打卡（整库读写）耗时与结果', async () => {
+    seedDB(bigDB(BIG_N), 'migrated');
+    await S.getMedicines();
+    const t0 = Date.now();
+    await S.consumeMedicine('BIG-00007', 3);
+    const ms = Date.now() - t0;
+    const m = (await S.getMedicines()).find(x => x.id === 'BIG-00007');
+    check(m.total_quantity === 4 && ms < BIG_LIMIT_MS, {
+      expected: '7%50=7 → 扣 3 后为 4，耗时 < ' + BIG_LIMIT_MS + 'ms',
+      actual: '库存=' + j(m.total_quantity) + '，' + ms + 'ms',
+      evidence: 'services/medicineService.ts:626-671 每次操作整库读写',
+    });
+    return '库存 7→4 / ' + ms + 'ms';
+  });
+  await run('BG3', BIG_N + ' 条 + ' + BIG_N + ' 日志：exportData 耗时与计数', async () => {
+    seedDB(bigDB(BIG_N), 'migrated');
+    const t0 = Date.now();
+    const raw = await S.exportData();
+    const ms = Date.now() - t0;
+    const p = JSON.parse(raw);
+    check(p.counts.medicines === BIG_N && p.counts.logs === BIG_N && ms < BIG_LIMIT_MS, {
+      expected: 'counts=' + BIG_N + '/' + BIG_N + '，耗时 < ' + BIG_LIMIT_MS + 'ms',
+      actual: j(p.counts) + '，' + ms + 'ms，' + raw.length + ' 字节',
+      evidence: 'services/medicineService.ts:831-853',
+    });
+    return raw.length + ' 字节 / ' + ms + 'ms';
+  });
+  await run('BG4', BIG_N + ' 条：importData(replace) 耗时与 id 完整性', async () => {
+    seedDB();
+    const raw = j({ medicines: bigDB(BIG_N).medicines, shoppingList: [], logs: [] });
+    const t0 = Date.now();
+    const res = await S.importData(raw, 'replace');
+    const ms = Date.now() - t0;
+    const stored = rawMedicines();
+    const idsOk = stored[0].id === 'BIG-00000' && stored[BIG_N - 1].id === 'BIG-00' + (BIG_N - 1);
+    check(res.medicines === BIG_N && stored.length === BIG_N && idsOk && ms < BIG_LIMIT_MS, {
+      expected: '导入 ' + BIG_N + ' 条、顺序与 id 完整、耗时 < ' + BIG_LIMIT_MS + 'ms',
+      actual: 'res=' + j(res.medicines) + ' 落库=' + stored.length + ' 首尾 id=' + stored[0].id + '..' + stored[BIG_N - 1].id + '，' + ms + 'ms',
+      evidence: 'services/medicineService.ts:894-908 逐条 sanitize + 单次写回',
+    });
+    return BIG_N + ' 条 / ' + ms + 'ms';
+  });
+  await run('BG5', BIG_N + ' 条：sortMedicines 耗时与元素守恒', async () => {
+    seedDB(bigDB(BIG_N), 'migrated');
+    const meds = await S.getMedicines();
+    const t0 = Date.now();
+    const sorted = S.sortMedicines(meds);
+    const ms = Date.now() - t0;
+    const sameSet = new Set(sorted.map(m => m.id)).size === BIG_N;
+    check(sorted.length === BIG_N && sameSet && sorted !== meds && ms < BIG_LIMIT_MS, {
+      expected: '排序后仍 ' + BIG_N + ' 条且 id 集合不变（不原地改数组），耗时 < ' + BIG_LIMIT_MS + 'ms',
+      actual: sorted.length + ' 条，唯一 id=' + new Set(sorted.map(m => m.id)).size + '，' + ms + 'ms',
+      evidence: 'services/medicineService.ts:613-623 拷贝后排序',
+    });
+    return BIG_N + ' 条 / ' + ms + 'ms';
+  });
+  await run('BG6', BIG_N + ' 条：全量字段无 NaN / Infinity / 负数', async () => {
+    seedDB(bigDB(BIG_N), 'migrated');
+    await S.getMedicines();
+    const bad = [];
+    for (const m of rawMedicines()) {
+      for (const f of ['total_quantity', 'threshold', 'daily_usage', 'usage_frequency_score']) {
+        if (typeof m[f] !== 'number' || !Number.isFinite(m[f]) || m[f] < 0) bad.push(m.id + '.' + f + '=' + j(m[f]));
+      }
+    }
+    check(bad.length === 0, {
+      expected: '4 个数值字段全部为有限非负数',
+      actual: bad.length + ' 处异常: ' + bad.slice(0, 5).join(' | '),
+      evidence: 'services/medicineService.ts:306 nonNegNum',
+    });
+    return BIG_N + ' 条 × 4 字段全部合法';
+  });
+  await run('BG7', BIG_N + ' 条日志：读取、倒序、无丢数据', async () => {
+    seedDB(bigDB(BIG_N), 'migrated');
+    const t0 = Date.now();
+    const logs = await S.getUsageLogs();
+    const ms = Date.now() - t0;
+    const desc = logs.every((l, i) => i === 0 || logs[i - 1].log_time >= l.log_time);
+    check(logs.length === BIG_N && desc && logs[0].id === 'BIGLOG-00999' && ms < BIG_LIMIT_MS, {
+      expected: BIG_N + ' 条、按时间倒序（首条为最新的 BIGLOG-00999）',
+      actual: logs.length + ' 条、倒序=' + desc + '、首条=' + logs[0].id + '，' + ms + 'ms',
+      evidence: 'services/medicineService.ts:606-610 localeCompare 倒序',
+    });
+    return BIG_N + ' 条 / ' + ms + 'ms';
+  });
+
+  // ----------------------------------------------------------
+  line('');
   line('--- K. 属性测试：随机操作序列不变量 ---');
   // ----------------------------------------------------------
   function mulberry32(a) {
@@ -1405,7 +2237,7 @@ async function main() {
       default: return op.kind;
     }
   }
-  const SEQ_COUNT = 200;
+  const SEQ_COUNT = 300;
   async function runPropertySequences(count) {
     const violations = [];
     let steps = 0, clampEvents = 0, seqs = 0;
@@ -1522,13 +2354,27 @@ async function main() {
             violations.push({ inv: 'INV0 模型一致', trace: trace.slice(), detail: '模型中的药品 ' + id + ' 未出现在持久化数据中' });
           }
         }
+        // INV3：补货清单不得存在孤儿条目 —— 带 medicine_id 的必须能对应到现存药品；
+        //       无 medicine_id 的历史条目必须能找到同名药品。
+        for (const item of (Array.isArray(snapshot.shoppingList) ? snapshot.shoppingList : [])) {
+          if (item.status !== 'pending') continue;
+          const linked = item.medicine_id
+            ? snapshot.medicines.some(m => String(m.id) === String(item.medicine_id))
+            : snapshot.medicines.some(m => m.name === item.medicine_name);
+          if (!linked) {
+            violations.push({
+              inv: 'INV3 清单无孤儿条目', trace: trace.slice(),
+              detail: '条目 ' + j({ id: item.id, name: item.medicine_name, brand: item.brand, medicine_id: item.medicine_id }) + ' 找不到对应药品',
+            });
+          }
+        }
       }
     }
     return { violations, steps, clampEvents, seqs };
   }
   const prop = await runPropertySequences(SEQ_COUNT);
-  await run('K1', '属性测试：' + SEQ_COUNT + ' 组随机操作序列，每步后库存恒为有限非负数', () => {
-    const bad = prop.violations.filter(v => v.inv !== 'INV2 库存 = 累计入库 − 累计消耗 + 调整' && v.inv !== 'INV2b 台账恒等式');
+  await run('K1', '属性测试：' + SEQ_COUNT + ' 组随机操作序列，每步后库存恒为有限非负数（INV1）', () => {
+    const bad = prop.violations.filter(v => !v.inv.startsWith('INV2') && v.inv !== 'INV3 清单无孤儿条目');
     check(bad.length === 0, {
       expected: '所有序列的每一步，库存都是有限非负数（typeof number 且 >= 0）',
       actual: bad.length + ' 处违反：' + bad.map(v => v.inv + ' @ ' + v.detail).join(' | '),
@@ -1545,20 +2391,45 @@ async function main() {
     });
     return '超量打卡触发 clamp ' + prop.clampEvents + ' 次（clamp 语义已计入台账）';
   });
-  await run('K3', '属性测试边界：入库数量为负时 INV1 仍应成立（拒绝或兜底）', async () => {
+  await run('K3', '属性测试边界：入库数量为负必须被拒绝，且库里不出现负库存（INV1 的对抗输入）', async () => {
     seedDB();
     const r = await mustThrow(() => S.addMedicine(makeMed({ id: 'K3-neg', name: '负库存药', total_quantity: -5 })));
     const meds = await S.getMedicines();
     const q = meds.length ? meds[0].total_quantity : null;
-    check(r.threw || (Number.isFinite(q) && q >= 0), {
-      expected: 'addMedicine 拒绝负数（抛错），或入库后库存仍 >= 0',
-      actual: r.threw ? '已抛错 ' + describeError(r.error) : '未抛错，落库 total_quantity=' + j(q),
-      evidence: 'services/medicineService.ts:615-646 addMedicine 无数量校验（对照 restockMedicine:699-703 / consumeMedicine:561-563）；'
-        + '经 importData 清洗通道（sanitizeMedicine:896 → num():252-255 仅判 isFinite）负数可完整进入库存。'
-        + '最小复现：addMedicine({total_quantity:-5}) → 读回 -5',
-      severity: '中（与 INV1 冲突：负库存可被写入并持久化）',
+    check(r.threw && (meds.length === 0 || (Number.isFinite(q) && q >= 0)), {
+      expected: '抛错「入库数量必须为不小于 0 的数字」，且不落库',
+      actual: r.threw ? '已抛错 ' + describeError(r.error) + '；落库 ' + meds.length + ' 条' : '未抛错，落库 total_quantity=' + j(q),
+      evidence: 'services/medicineService.ts:696-700 addMedicine 数量防御（首轮验收修复项，与 restockMedicine:793-797 / consumeMedicine 对称）',
     });
     return r.threw ? '被拒绝' : '负库存已落库';
+  });
+  await run('K4', '属性测试：任意时刻补货清单不存在孤儿条目（INV3）', () => {
+    const bad = prop.violations.filter(v => v.inv === 'INV3 清单无孤儿条目');
+    check(bad.length === 0, {
+      expected: '每步之后：清单里每条 pending 条目都能对应到现存药品（id 命中或同名命中）',
+      actual: bad.length + ' 处违反：' + bad.map(v => v.detail).join(' | '),
+      evidence: bad.length ? '触发序列：\n       ' + bad[0].trace.map((t, i) => (i + 1) + ') ' + t).join('\n       ') : '',
+    });
+    return prop.seqs + ' 组序列 / ' + prop.steps + ' 步内未出现孤儿条目';
+  });
+  await run('K5', '孤儿防护（对抗输入）：删除药品后，旧备份里「带品牌但无 medicine_id」的同品牌条目不应残留', async () => {
+    seedDB({
+      medicines: [makeMed({ id: 'K5-med', name: '历史药', brand: '老品牌', total_quantity: 1, expiry_date: shiftToday(-1) })],
+      shoppingList: [{ id: 'K5-item', medicine_name: '历史药', brand: '老品牌', reason: '过期', status: 'pending', created_at: '2026-01-01T00:00:00.000Z' }],
+      logs: [],
+    }, 'migrated');
+    await S.deleteMedicine('K5-med');
+    const meds = rawMedicines();
+    const list = await S.getShoppingList();
+    const orphans = list.filter(i => !meds.some(m => (i.medicine_id ? String(m.id) === String(i.medicine_id) : m.name === i.medicine_name)));
+    check(orphans.length === 0, {
+      expected: '删除后该药品的历史条目被清理，清单 0 条孤儿',
+      actual: orphans.length + ' 条孤儿: ' + j(orphans.map(i => ({ n: i.medicine_name, b: i.brand, mid: i.medicine_id }))),
+      evidence: 'services/medicineService.ts:775-782：无 medicine_id 但带 brand 的条目一律 return true（假定归属其它品牌）；'
+        + '品牌恰好与被删药品相同时该提醒残留。最小复现：seed 一条 {medicine_name:"历史药", brand:"老品牌"}（模拟旧备份）→ deleteMedicine(该药品) → 条目仍在',
+      severity: '低（仅旧备份/旧设备遗留的无 id 条目；新数据一律带 medicine_id，NB9/NB10 已覆盖）',
+    });
+    return '无孤儿';
   });
 
   // ----------------------------------------------------------
@@ -1579,7 +2450,7 @@ async function main() {
 // 入口
 // ==========================================================
 if (process.argv[2] === TZ_CHILD_FLAG) {
-  tzChildMain(process.argv[3]).then((out) => {
+  tzChildMain(process.argv[3], process.argv[4]).then((out) => {
     process.stdout.write('__TZ_JSON__' + JSON.stringify(out) + '\n');
   }).catch((e) => {
     process.stderr.write('TZ-CHILD-ERROR ' + ((e && e.stack) || String(e)) + '\n');
