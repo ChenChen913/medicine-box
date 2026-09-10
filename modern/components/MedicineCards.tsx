@@ -4,7 +4,7 @@
  * 描述: 三种卡片形态，均按设计稿还原并接入真实数据：
  *       - DesktopCard  桌面端大卡（渐变图标方块 + 适应症条 + 大号库存 + 吃药按钮）
  *       - MobileCard   移动端大卡（三列库存读数区 + 吃药按钮）
- *       - MobileMiniCard 移动端小卡（外用/器械类双列网格，取用 1 次完成）
+ *       - MobileCard 移动端卡片（全部类别统一单列大卡，含库存/效期/用法与快捷打卡）
  */
 
 import React from 'react';
@@ -200,43 +200,3 @@ export const MobileCard: React.FC<{ med: Medicine } & CardActions> = ({ med, onR
   );
 };
 
-// ============ 移动小卡（外用/器械等轻量物资） ============
-
-export const MobileMiniCard: React.FC<{ med: Medicine } & CardActions> = ({ med, onOpenDetail, onQuickConsume }) => {
-  const status = getStatus(med);
-  return (
-    <div
-      className="p-4 rounded-2xl bg-m3-surface-container-lowest shadow-[0_4px_16px_rgba(0,0,0,0.03)] flex flex-col justify-between gap-2"
-      onClick={() => onOpenDetail(med)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenDetail(med); } }}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${status.key === 'expired' ? 'bg-m3-error-container/40 text-m3-error' : 'bg-m3-secondary-container/50 text-m3-primary'}`}>
-            <Icon name={getCategoryMeta(med.category).icon} className="w-[18px] h-[18px]" />
-          </div>
-          <div className="flex flex-col min-w-0">
-            <span className="text-sm font-semibold text-m3-on-surface truncate">{med.name}</span>
-            <span className={`text-[11px] truncate ${status.key === 'expired' ? 'text-m3-error font-medium' : 'text-m3-on-surface-variant'}`}>{status.label}</span>
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center justify-between pt-1">
-        <div className="flex items-baseline gap-1">
-          <span className="text-lg font-bold text-m3-on-surface">{med.total_quantity}</span>
-          <span className="text-[11px] text-m3-on-surface-variant">{med.unit}剩余</span>
-        </div>
-        <button
-          type="button"
-          disabled={med.total_quantity <= 0}
-          onClick={e => { e.stopPropagation(); onQuickConsume?.(med); }}
-          className="px-3 py-1 rounded-full bg-m3-surface-container-low hover:bg-m3-surface-container text-m3-on-surface text-xs font-medium active:scale-95 transition-all disabled:opacity-40"
-        >
-          取用 1{med.unit}
-        </button>
-      </div>
-    </div>
-  );
-};

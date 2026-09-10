@@ -1,5 +1,12 @@
 import { useEffect, useRef } from 'react';
 
+/** 表单控件（打开弹窗时要优先聚焦的目标） */
+const FORM_CONTROL = [
+  'input:not([disabled]):not([type="hidden"]):not([type="file"])', // 文件框不计入：聚焦它肉眼不可见
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+].join(', ');
+
 /** 可聚焦元素选择器（与 WAI-ARIA 对话框模式一致） */
 const FOCUSABLE = [
   'a[href]',
@@ -36,9 +43,18 @@ export function useDialogA11y<T extends HTMLElement>(open: boolean = true) {
       Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE))
         .filter(el => el.getClientRects().length > 0);
 
-    // 打开即把焦点移入弹窗（修复：此前焦点停在 body，键盘用户 Tab 会先在背景内容里绕一圈）
-    const firstFocusable = focusables()[0];
-    (firstFocusable ?? panel).focus({ preventScroll: true });
+    // 打开即把焦点移入弹窗，且**优先落在第一个输入框**而不是头部的关闭按钮：
+    //   - 用户点开「入库新药/购入登记」本意就是填表，焦点直接进输入框才顺手；
+    //   - 弹窗内没有表单控件时（详情抽屉、备份弹窗）才退回容器本身，
+    //     让读屏先读出对话框标题，再按 Tab 进入控件。
+    // （此前直接取"第一个可聚焦元素"，而 DOM 里排在最前的是关闭按钮 ——
+    //   表现为"点了入库新药，焦点没进输入框"，老板 2026-09-10 反馈）
+    const firstControl = Array.from(panel.querySelectorAll<HTMLElement>(FORM_CONTROL))
+      .find(el => el.getClientRects().length > 0);
+    const autoFocusEl = Array.from(panel.querySelectorAll<HTMLElement>('[autofocus], [data-autofocus]'))
+      .find(el => el.getClientRects().length > 0);
+    const initialTarget = autoFocusEl ?? firstControl ?? panel;
+    initialTarget.focus({ preventScroll: true });
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;

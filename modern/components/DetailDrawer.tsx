@@ -14,6 +14,7 @@ import React, { useMemo } from 'react';
 import { Medicine, UsageLog } from '../../types';
 import { getStatus, usableDays, formatLogTime, getCategoryMeta } from '../ui';
 import { Icon } from '../icons';
+import { useDialogA11y } from '../useDialogA11y';
 
 interface Props {
   med: Medicine;
@@ -70,6 +71,9 @@ function estimateTrend(med: Medicine, logs: UsageLog[]): { points: { x: number; 
 }
 
 export const DetailDrawer: React.FC<Props> = ({ med, logs, onClose, onConsume, onRestock, onEdit, onDelete }) => {
+  // 焦点管理：打开时移入、Tab 锁在抽屉内、关闭后归位
+  const panelRef = useDialogA11y<HTMLDivElement>();
+
   const meta = getCategoryMeta(med.category);
   const status = getStatus(med);
   const remain = usableDays(med);
@@ -92,7 +96,9 @@ export const DetailDrawer: React.FC<Props> = ({ med, logs, onClose, onConsume, o
       {/* 弹窗容器：手机端贴底抽屉 / 桌面端居中；pointer-events-none 让空白区域点击穿透到遮罩 */}
       <div className="fixed inset-0 z-[61] flex items-end md:items-center justify-center md:p-4 pointer-events-none">
         <div
-          className="pointer-events-auto relative w-full md:max-w-lg max-h-[80vh] md:max-h-[86vh] bg-m3-surface-container-lowest rounded-t-3xl md:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-8 md:slide-in-from-bottom-0 md:zoom-in-95 duration-200"
+          ref={panelRef}
+          tabIndex={-1}
+          className="pointer-events-auto relative w-full md:max-w-lg max-h-[80vh] md:max-h-[86vh] bg-m3-surface-container-lowest rounded-t-3xl md:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-8 md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 outline-none"
           role="dialog"
           aria-modal="true"
           aria-label={`${med.name} 详情`}

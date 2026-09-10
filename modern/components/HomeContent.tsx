@@ -12,7 +12,7 @@ import { getCategoryWeight } from '../../services/medicineService';
 import { HealthOverview, getStatus, getCategoryMeta } from '../ui';
 import { Icon, IconName } from '../icons';
 import { M3Select, SelectOption } from './Select';
-import { DesktopCard, MobileCard, MobileMiniCard } from './MedicineCards';
+import { DesktopCard, MobileCard } from './MedicineCards';
 
 export type FilterKey = 'all' | 'normal' | 'low' | 'expiring' | 'expired';
 export type CardActions = {
@@ -361,8 +361,6 @@ export const CategorySections: React.FC<{ meds: Medicine[]; /** 药箱整体为�
   return (
     <div className="flex flex-col gap-6 md:gap-8">
       {grouped.map(([category, list]) => {
-        // 外用 / 器械等轻量物资在移动端用双列小卡（设计稿的外伤急救形态）
-        const compactMobile = category.includes('外用') || category.includes('器械');
         return (
           <section key={category} className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-2">
@@ -378,15 +376,11 @@ export const CategorySections: React.FC<{ meds: Medicine[]; /** 药箱整体为�
               {list.map(m => <DesktopCard key={m.id} med={m} {...actions} />)}
             </div>
 
-            {/* 移动端：轻量物资双列小卡，其余单列大卡 */}
+            {/* 移动端：统一单列大卡。
+                此前"外用/器械"走双列小卡，但这类物资同样有库存/效期/用法用量，
+                缩小卡片反而少显示信息、与其他类别不一致（老板 2026-09-10 反馈统一）。 */}
             <div className="md:hidden flex flex-col gap-2.5">
-              {compactMobile ? (
-                <div className="grid grid-cols-2 gap-2.5">
-                  {list.map(m => <MobileMiniCard key={m.id} med={m} {...actions} />)}
-                </div>
-              ) : (
-                list.map(m => <MobileCard key={m.id} med={m} {...actions} />)
-              )}
+              {list.map(m => <MobileCard key={m.id} med={m} {...actions} />)}
             </div>
           </section>
         );
