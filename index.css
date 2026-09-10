@@ -15,6 +15,18 @@ body {
   background-color: #f8fafc;
 }
 
+/* 弹层最大高度统一走「小视口单位」svh：
+   手机地址栏收起/展开时 vh 会变、dvh 会实时变（滚动过程中高度跟着抽动），
+   只有 svh 是按"地址栏可见时"的最小视口算且恒定不变 —— 面板高度稳定，不抖。
+   旧浏览器忽略第二条声明，回退到 vh。 */
+.sheet-max      { max-height: 80vh; max-height: 80svh; }
+.sheet-max-form { max-height: 76vh; max-height: 76svh; }
+.sheet-max-date { max-height: 86vh; max-height: 86svh; }
+@media (min-width: 768px) {
+  .sheet-max      { max-height: 86vh; max-height: 86svh; }
+  .sheet-max-form { max-height: 90vh; max-height: 90svh; }
+}
+
 /* 简单的自定义滚动条 */
 ::-webkit-scrollbar {
   width: 6px;

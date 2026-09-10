@@ -36,7 +36,7 @@ export const ModalShell: React.FC<{ title: string; subtitle?: string; icon?: Ico
     <div
       ref={panelRef}
       tabIndex={-1}
-      className={`relative bg-m3-surface-container-lowest w-full ${wide ? 'md:max-w-xl' : 'md:max-w-md'} max-h-[76vh] md:max-h-[90vh] overflow-y-auto shadow-2xl rounded-t-3xl md:rounded-3xl animate-in fade-in slide-in-from-bottom-8 md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 outline-none`}
+      className={`relative bg-m3-surface-container-lowest w-full ${wide ? 'md:max-w-xl' : 'md:max-w-md'} sheet-max-form overflow-y-auto shadow-2xl rounded-t-3xl md:rounded-3xl animate-in fade-in slide-in-from-bottom-8 md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 outline-none`}
       role="dialog"
       aria-modal="true"
       aria-label={title}

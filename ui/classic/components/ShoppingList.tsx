@@ -92,7 +92,7 @@ const ShoppingList: React.FC = () => {
       )}
 
       {restockItem && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 ">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
             <h3 className="text-xl font-bold text-slate-800 mb-1">购入登记</h3>
             <p className="text-slate-600 text-sm mb-6">药品: <span className="font-medium text-emerald-700">{restockItem.medicine_name}</span></p>

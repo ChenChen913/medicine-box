@@ -81,7 +81,7 @@ const PickerDialog: React.FC<{
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel + '（选择日期）'}
-        className="relative w-full sm:w-[340px] max-h-[86vh] overflow-y-auto overscroll-contain outline-none bg-m3-surface-container-lowest rounded-t-3xl sm:rounded-3xl shadow-2xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200"
+        className="relative w-full sm:w-[340px] sheet-max-date overflow-y-auto overscroll-contain outline-none bg-m3-surface-container-lowest rounded-t-3xl sm:rounded-3xl shadow-2xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200"
       >
         {/* 手机端拖拽指示条 */}
         <div className="sm:hidden flex justify-center pb-2" aria-hidden="true">

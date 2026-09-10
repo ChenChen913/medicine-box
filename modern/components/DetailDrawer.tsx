@@ -99,7 +99,7 @@ export const DetailDrawer: React.FC<Props> = ({ med, logs, onClose, onConsume, o
         <div
           ref={panelRef}
           tabIndex={-1}
-          className="pointer-events-auto relative w-full md:max-w-lg max-h-[80vh] md:max-h-[86vh] bg-m3-surface-container-lowest rounded-t-3xl md:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-8 md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 outline-none"
+          className="pointer-events-auto relative w-full md:max-w-lg sheet-max bg-m3-surface-container-lowest rounded-t-3xl md:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-8 md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 outline-none"
           role="dialog"
           aria-modal="true"
           aria-label={`${med.name} 详情`}

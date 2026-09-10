@@ -1167,6 +1167,63 @@ async function main() {
       await m.close();
     }
 
+    /* ============ G12 手机端弹层稳定性（背景滚动锁定 + svh 高度） ============ */
+    group('G12 手机端弹层稳定性');
+    {
+      // 根因复现（修复前实测）：在遮罩区拖动，背景页被带着滚（scrollY 400 → 0），
+      // 半透明遮罩后的内容整页移动 —— 这就是老板反复反馈的"抖动 / 黑影闪动"。
+      const p = await newPage(browser, 390, 844, true);
+      await openApp(p);
+      await p.evaluate(() => window.scrollTo(0, 400));
+      await sleep(400);
+      await openDetailByName(p, '布洛芬');
+      await sleep(900);
+      const cdp = await p.target().createCDPSession();
+      const state = () => p.evaluate(() => ({
+        scrollY: window.scrollY,
+        pos: getComputedStyle(document.body).position,
+        top: Math.round(document.body.getBoundingClientRect().top),
+        panelH: Math.round((document.querySelector('[role=dialog]') || { getBoundingClientRect: () => ({ height: 0 }) }).getBoundingClientRect().height),
+      }));
+      const touchSwipe = async (x, y0, dy, steps = 6) => {
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: y0 }] });
+        for (let i = 1; i <= steps; i++) {
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y0 + (dy * i) / steps }] });
+          await sleep(25);
+        }
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await sleep(500);
+      };
+      const opened = await state();
+      record('G12.1', '详情打开时背景被锁定（body position:fixed，内容不随手指移动）',
+        opened.pos === 'fixed' && opened.top === -400 && opened.panelH > 100,
+        JSON.stringify(opened));
+
+      await touchSwipe(195, 180, 260); // 在遮罩区（面板上方露出部分）往下拖
+      const afterScrim = await state();
+      record('G12.2', '在遮罩区域拖动：背景页纹丝不动（修复前会被拖动整页，即"黑影闪动"）',
+        afterScrim.top === opened.top && afterScrim.panelH === opened.panelH,
+        '拖动前 top=' + opened.top + '，拖动后 top=' + afterScrim.top + '，面板高=' + afterScrim.panelH);
+
+      await touchSwipe(195, 760, -240); // 面板内往上拖：抽屉内容应正常滚动
+      const innerTop = await p.evaluate(() => { const el = document.querySelector('[role=dialog] .overflow-y-auto'); return el ? Math.round(el.scrollTop) : -1; });
+      record('G12.3', '锁定背景后抽屉内容仍可正常滚动（没有把滚动一起锁死）', innerTop > 0, '抽屉内 scrollTop=' + innerTop);
+
+      await p.keyboard.press('Escape'); await sleep(900);
+      const closed = await state();
+      record('G12.4', '关闭后解锁并回到原滚动位置（不是被弹回页首）',
+        closed.pos === 'static' && closed.scrollY === 400 && closed.panelH === 0,
+        JSON.stringify(closed));
+
+      // svh：地址栏收起/展开时高度恒定（vh 会变、dvh 会实时抽动）
+      const cssFile = fs.readdirSync(path.join(ROOT, 'dist', 'assets')).find(f => f.endsWith('.css'));
+      const css = cssFile ? fs.readFileSync(path.join(ROOT, 'dist', 'assets', cssFile), 'utf8') : '';
+      record('G12.5', '弹层最大高度用 svh（地址栏收放时面板高度恒定）',
+        /\.sheet-max[^{]*\{[^}]*max-height:\s*80svh/.test(css) && /\.sheet-max-form[^{]*\{[^}]*76svh/.test(css),
+        'CSS 命中 svh 规则=' + /\.sheet-max[^{]*\{[^}]*max-height:\s*80svh/.test(css));
+      await p.close();
+    }
+
   } finally {
     try { await BROWSER.close(); } catch { /* ignore */ }
     try { server.kill(); } catch { /* ignore */ }

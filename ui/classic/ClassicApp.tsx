@@ -366,7 +366,7 @@ function App() {
 
       {/* --- 详情弹窗 --- */}
       {selectedMed && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSelectedMed(null)}>
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 " onClick={() => setSelectedMed(null)}>
           <div
             ref={detailDialogRef}
             tabIndex={-1}
@@ -473,7 +473,7 @@ function App() {
 
       {/* --- 删除确认弹窗 --- */}
       {deleteConfirmId && (
-        <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setDeleteConfirmId(null)}>
+        <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4 " onClick={() => setDeleteConfirmId(null)}>
           <div
             ref={deleteDialogRef}
             tabIndex={-1}
@@ -497,7 +497,7 @@ function App() {
 
       {/* --- 吃药确认弹窗 --- */}
       {consumeTarget && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setConsumeMedId(null)}>
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 " onClick={() => setConsumeMedId(null)}>
           <div
             ref={consumeDialogRef}
             tabIndex={-1}
