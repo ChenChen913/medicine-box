@@ -6,6 +6,10 @@
 
 interface ImportMetaEnv {
   readonly BASE_URL: string;
+  /** true = 生产构建（index.tsx 用它在生产环境注册 Service Worker） */
+  readonly PROD: boolean;
+  readonly DEV: boolean;
+  readonly MODE: string;
   readonly VITE_SUPABASE_URL?: string;
   readonly VITE_SUPABASE_ANON_KEY?: string;
 }

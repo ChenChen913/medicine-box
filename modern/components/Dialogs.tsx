@@ -19,16 +19,23 @@ import {
 import { Icon, IconName } from '../icons';
 import { getCategoryMeta } from '../ui';
 import { M3Select, SelectOption } from './Select';
+import { useDialogA11y } from '../useDialogA11y';
 
 // ---------- 通用弹窗外壳 ----------
 
 export const ModalShell: React.FC<{ title: string; subtitle?: string; icon?: IconName; onClose: () => void; children: React.ReactNode; wide?: boolean }> =
-({ title, subtitle, icon = 'info', onClose, children, wide }) => (
+({ title, subtitle, icon = 'info', onClose, children, wide }) => {
+  // 焦点移入 + Tab 循环锁定 + 关闭归位（无障碍：键盘用户不应 Tab 到弹窗背后的内容）
+  const panelRef = useDialogA11y<HTMLDivElement>();
+
+  return (
   // 手机端 items-end 贴底呈抽屉形态，桌面端保持居中卡片
   <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-4">
     <div className="fixed inset-0 bg-m3-on-surface/40 backdrop-blur-[2px] animate-in fade-in duration-200" onClick={onClose} />
     <div
-      className={`relative bg-m3-surface-container-lowest w-full ${wide ? 'md:max-w-xl' : 'md:max-w-md'} max-h-[76vh] md:max-h-[90vh] overflow-y-auto shadow-2xl rounded-t-3xl md:rounded-3xl animate-in fade-in slide-in-from-bottom-8 md:slide-in-from-bottom-0 md:zoom-in-95 duration-200`}
+      ref={panelRef}
+      tabIndex={-1}
+      className={`relative bg-m3-surface-container-lowest w-full ${wide ? 'md:max-w-xl' : 'md:max-w-md'} max-h-[76vh] md:max-h-[90vh] overflow-y-auto shadow-2xl rounded-t-3xl md:rounded-3xl animate-in fade-in slide-in-from-bottom-8 md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 outline-none`}
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -57,7 +64,8 @@ export const ModalShell: React.FC<{ title: string; subtitle?: string; icon?: Ico
       <div className="px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:px-6 md:pt-6 md:pb-6">{children}</div>
     </div>
   </div>
-);
+  );
+};
 
 // ---------- 服药确认 ----------
 

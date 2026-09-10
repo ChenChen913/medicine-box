@@ -120,7 +120,9 @@ export function getHealthOverview(medicines: Medicine[]): HealthOverview {
   });
 
   const normal = total - low - out - expired;
-  const score = total === 0 ? 100 : Math.round((normal / total) * 100);
+  // 空箱没有"健康度"可言：旧实现返回 100，界面上会出现「100% 达标」与
+  // 「待入库」自相矛盾的误导性评级（0/0 不是满分）。
+  const score = total === 0 ? 0 : Math.round((normal / total) * 100);
 
   // 空箱是投产后的初始状态（2026-09-09 起不再预置演示数据），需要引导而非「状态良好」
   let grade = '需关注';

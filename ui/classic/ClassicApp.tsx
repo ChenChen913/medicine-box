@@ -13,6 +13,7 @@ import ShoppingList from './components/ShoppingList';
 import AddMedicineForm from './components/AddMedicineForm';
 import { DataBackupDialog } from '../../modern/components/DataBackup';
 import UISwitcher from '../UISwitcher';
+import { useDialogA11y } from '../../modern/useDialogA11y';
 
 // --- 图标组件 ---
 const IconHome = () => <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>;
@@ -28,11 +29,16 @@ function App() {
 
   const [selectedMed, setSelectedMed] = useState<Medicine | null>(null);
   const [consumeMedId, setConsumeMedId] = useState<string | null>(null);
+
+  // 弹窗无障碍：焦点移入 + Tab 锁定 + 关闭归位（经典版页内弹窗，条件渲染用 open 驱动）
+  const detailDialogRef = useDialogA11y<HTMLDivElement>(!!selectedMed);
+  const consumeDialogRef = useDialogA11y<HTMLDivElement>(!!consumeMedId);
   const [consumeAmount, setConsumeAmount] = useState<number>(1);
   const [showAddForm, setShowAddForm] = useState(false);
   // 编辑模式：记录正在编辑的药品；null 表示表单为新建模式
   const [editingMed, setEditingMed] = useState<Medicine | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const deleteDialogRef = useDialogA11y<HTMLDivElement>(!!deleteConfirmId);
   // 详情弹窗图片加载失败标记（外链图片在部分手机网络下不可达，失败时降级为 emoji 占位）
   const [detailImageFailed, setDetailImageFailed] = useState(false);
   // 数据加载失败（区别于「空药箱」）：加载失败时显示错误横幅，避免用户误以为药箱是空的
@@ -361,7 +367,13 @@ function App() {
       {/* --- 详情弹窗 --- */}
       {selectedMed && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSelectedMed(null)}>
-          <div className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-0 relative shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+          <div
+            ref={detailDialogRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${selectedMed.name} 详情`}
+            className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-0 relative shadow-2xl animate-in zoom-in-95 duration-200 outline-none" onClick={e => e.stopPropagation()}>
             <button className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-black/10 text-slate-600 hover:bg-black/20 z-10" aria-label="关闭详情" onClick={() => setSelectedMed(null)}>✕</button>
             
             <div className="relative h-64 bg-slate-100">
@@ -462,7 +474,13 @@ function App() {
       {/* --- 删除确认弹窗 --- */}
       {deleteConfirmId && (
         <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setDeleteConfirmId(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+          <div
+            ref={deleteDialogRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-label="确认删除药品"
+            className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in-95 duration-200 outline-none" onClick={e => e.stopPropagation()}>
             <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center text-2xl mb-4 mx-auto">🗑️</div>
             <h3 className="text-xl font-bold text-center text-slate-800 mb-2">确认删除?</h3>
             <p className="text-center text-slate-500 mb-8 px-4">
@@ -480,7 +498,13 @@ function App() {
       {/* --- 吃药确认弹窗 --- */}
       {consumeTarget && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setConsumeMedId(null)}>
-          <div className="bg-white rounded-3xl w-full max-w-sm p-8 shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+          <div
+            ref={consumeDialogRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-label="确认服用"
+            className="bg-white rounded-3xl w-full max-w-sm p-8 shadow-2xl animate-in zoom-in-95 duration-200 outline-none" onClick={e => e.stopPropagation()}>
             <h3 className="text-xl font-bold text-center mb-2 text-slate-800">确认服用</h3>
             <p className="text-center text-emerald-600 font-medium mb-8">{consumeTarget.name}</p>
             <div className="flex items-center justify-center gap-6 mb-10">
@@ -531,6 +555,11 @@ function App() {
           }}
         />
       )}
+
+      {/* 免责说明：本工具只做家庭药品库存记录，不提供医疗建议 */}
+      <footer className="mt-10 pb-6 px-6 text-center text-[11px] leading-relaxed text-slate-400">
+        本工具仅用于家庭药品的库存与效期记录，<strong className="font-semibold">不构成任何医疗建议</strong>；用药请遵医嘱并阅读说明书。
+      </footer>
     </div>
   );
 }

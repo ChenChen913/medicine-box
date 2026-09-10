@@ -132,10 +132,12 @@ export const LogsView: React.FC<{ logs: UsageLog[]; loading: boolean }> = ({ log
     return groups;
   }, [logs]);
 
+  // "现在"只在挂载时取一次（渲染期调用 Date.now() 违反组件纯函数约束）
+  const [nowTs] = useState(() => Date.now());
   const total30 = useMemo(() => {
-    const from = Date.now() - 30 * 86400000;
+    const from = nowTs - 30 * 86400000;
     return logs.filter(l => new Date(l.log_time).getTime() >= from).length;
-  }, [logs]);
+  }, [logs, nowTs]);
 
   return (
     <div className="max-w-3xl mx-auto px-4 md:px-0">

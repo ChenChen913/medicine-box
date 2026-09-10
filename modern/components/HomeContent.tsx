@@ -88,7 +88,9 @@ export const HealthBanner: React.FC<{ o: HealthOverview }> = ({ o }) => {
             <span className="w-2 h-2 rounded-full bg-m3-primary" />
             家庭储药健康度
           </span>
-          <span className="text-m3-primary font-bold text-lg">{o.score}% <span className="text-xs font-normal text-m3-on-surface-variant">达标</span></span>
+          {o.total === 0
+            ? <span className="text-m3-on-surface-variant font-bold text-lg">— <span className="text-xs font-normal">待入库</span></span>
+            : <span className="text-m3-primary font-bold text-lg">{o.score}% <span className="text-xs font-normal text-m3-on-surface-variant">达标</span></span>}
         </div>
         <div className="w-full h-2.5 rounded-full bg-m3-surface-container-low flex overflow-hidden p-0.5 gap-1">
           {segs.map((s, i) => s.width > 0 && (

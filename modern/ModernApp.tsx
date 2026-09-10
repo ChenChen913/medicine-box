@@ -16,10 +16,20 @@ import { getStatus, getHealthOverview } from './ui';
 import { Icon } from './icons';
 import UISwitcher from '../ui/UISwitcher';
 import { useToasts, ToastStack } from './components/Toast';
-import { DetailDrawer } from './components/DetailDrawer';
 import { ConsumeDialog, DeleteDialog, MedicineForm } from './components/Dialogs';
-import { DataBackupDialog } from './components/DataBackup';
-import { RestockView, LogsView } from './components/Views';
+
+// 只有"交互后才会出现"的重组件：拆成独立 chunk 按需加载，不占首屏 JS 体积。
+// 首屏只需要药箱主界面（列表/统计/搜索），抽屉与备份弹窗点开时再下载。
+const DetailDrawer = React.lazy(() =>
+  import('./components/DetailDrawer').then(m => ({ default: m.DetailDrawer })));
+const DataBackupDialog = React.lazy(() =>
+  import('./components/DataBackup').then(m => ({ default: m.DataBackupDialog })));
+// Tab 视图同理：默认进"我的药箱"，补货/用药记录页签点开时才需要
+const RestockView = React.lazy(() =>
+  import('./components/Views').then(m => ({ default: m.RestockView })));
+const LogsView = React.lazy(() =>
+  import('./components/Views').then(m => ({ default: m.LogsView })));
+
 import {
   SearchFilter, CategorySections, MobileHealthCard,
   HealthBanner, MetricGrid, useFilteredMedicines, usePinyinIndex,
@@ -358,8 +368,10 @@ const ModernApp: React.FC = () => {
             </div>
           )}
 
-          {view === 'restock' && <RestockView onChanged={refreshData} onGeneratePurchase={handleGeneratePurchase} />}
-          {view === 'logs' && <LogsView logs={logs} loading={loading} />}
+          <React.Suspense fallback={<div className="py-16 text-center text-sm text-m3-on-surface-variant">加载中…</div>}>
+            {view === 'restock' && <RestockView onChanged={refreshData} onGeneratePurchase={handleGeneratePurchase} />}
+            {view === 'logs' && <LogsView logs={logs} loading={loading} />}
+          </React.Suspense>
 
           {/* 页脚 */}
           <footer className="mt-12 md:mt-16 pt-6 border-t border-m3-surface-container-low flex flex-col sm:flex-row items-center justify-between gap-2 pb-4">
@@ -371,7 +383,12 @@ const ModernApp: React.FC = () => {
               />
               <span className="text-sm font-semibold text-m3-on-surface">家庭药箱</span>
             </div>
-            <div className="text-xs text-m3-on-surface-variant">© 2026 家庭药箱</div>
+            <div className="text-xs text-m3-on-surface-variant text-center sm:text-right max-w-md">
+              <div>© 2026 家庭药箱</div>
+              <div className="mt-1 leading-relaxed">
+                本工具仅用于家庭药品的库存与效期记录，<strong className="font-semibold">不构成任何医疗建议</strong>；用药请遵医嘱并阅读说明书。
+              </div>
+            </div>
           </footer>
         </div>
       </main>
@@ -396,15 +413,17 @@ const ModernApp: React.FC = () => {
 
       {/* 抽屉与弹窗 */}
       {drawerMed && (
-        <DetailDrawer
-          med={drawerMed}
-          logs={logs}
-          onClose={() => setDrawerMed(null)}
-          onConsume={setConsumeTarget}
-          onRestock={handleAddRestock}
-          onEdit={openEdit}
-          onDelete={setDeleteTarget}
-        />
+        <React.Suspense fallback={null}>
+          <DetailDrawer
+            med={drawerMed}
+            logs={logs}
+            onClose={() => setDrawerMed(null)}
+            onConsume={setConsumeTarget}
+            onRestock={handleAddRestock}
+            onEdit={openEdit}
+            onDelete={setDeleteTarget}
+          />
+        </React.Suspense>
       )}
       {consumeTarget && (
         <ConsumeDialog
@@ -439,14 +458,16 @@ const ModernApp: React.FC = () => {
 
       {/* 数据备份与恢复（导出/导入，新版 UI 入口：桌面顶栏 + 移动头部） */}
       {backupOpen && (
-        <DataBackupDialog
-          onClose={() => setBackupOpen(false)}
-          onDone={message => {
-            setBackupOpen(false);
-            showToast(message);
-            refreshData();
-          }}
-        />
+        <React.Suspense fallback={null}>
+          <DataBackupDialog
+            onClose={() => setBackupOpen(false)}
+            onDone={message => {
+              setBackupOpen(false);
+              showToast(message);
+              refreshData();
+            }}
+          />
+        </React.Suspense>
       )}
 
       {!overlayOpen && <UISwitcher bottomClass="bottom-24 md:bottom-6" />}
