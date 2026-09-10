@@ -26,9 +26,19 @@ async function loadDemoDataIfNeeded(): Promise<void> {
   const force = new URLSearchParams(window.location.search).get('demo') === '1';
 
   const { MedicineService } = await import('./services/medicineService');
-  const existing = await MedicineService.getMedicines().catch(() => [] as unknown[]);
 
-  if (existing.length > 0) {
+  let existing: unknown[];
+  try {
+    existing = await MedicineService.getMedicines();
+  } catch (e) {
+    // ⚠️ 关键：读取失败（存储损坏 / 不可用）绝不能当成"空药箱"。
+    // 否则这里会用演示数据 replace 掉用户真实（但暂时读不出来）的数据 ——
+    // 与「读失败绝不覆盖现有数据」的铁律直接冲突，e2e 的 G3.4 就抓到了这一点。
+    console.info('[demo] 数据读取失败，跳过演示数据载入：', e instanceof Error ? e.message : e);
+    return;
+  }
+
+  if (existing.length > 0) {  // 类型：getMedicines 返回 Medicine[]
     if (!force) return; // 有数据且非强制 → 绝不打扰
     const ok = window.confirm(
       '药箱里已有 ' + existing.length + ' 种药品，重新载入演示数据会【覆盖】它们。\n\n继续吗？（建议先导出备份）'

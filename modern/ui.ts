@@ -7,7 +7,7 @@
  */
 
 import { Medicine } from '../types';
-import { todayDateString } from '../services/medicineService';
+import { todayDateString, isValidCalendarDate } from '../services/medicineService';
 import { IconName } from './icons';
 
 // ============ 药品状态 ============
@@ -39,11 +39,17 @@ export function usableDays(m: Medicine): number | null {
 }
 
 export function getStatus(m: Medicine, today: string = todayDateString()): MedStatus {
+  // 日期必须先确认"是真实存在的日历日"，再做字符串比较：
+  // 脏数据（'2024-13-45'、空白串、'2024-02-30'）此前会被字典序比较当成过期，
+  // 并在 daysBetween 里算出 NaN —— 界面显示「已过期 NaN 天」（2026-09-10 由
+  // 扩展后的 UI 测试发现）。校验逻辑复用服务层的单一实现，避免两处漂移。
+  const expiry = isValidCalendarDate(m.expiry_date || '') ? (m.expiry_date as string) : '';
+
   // 过期优先级最高：无论库存多少，过期药品都不能再标注为「正常」
-  if (m.expiry_date && m.expiry_date < today) {
+  if (expiry && expiry < today) {
     // daysBetween(过期日, 今天) 已经是"过了多少天"的正数；
     // 旧代码多取了一次负号 → 任何过期药品都显示「已过期 1 天」（老 bug，2026-09-10 修）
-    const over = Math.max(1, daysBetween(m.expiry_date, today));
+    const over = Math.max(1, daysBetween(expiry, today));
     return {
       key: 'expired',
       label: `已过期 ${over} 天`,
@@ -71,8 +77,8 @@ export function getStatus(m: Medicine, today: string = todayDateString()): MedSt
     };
   }
 
-  if (m.expiry_date) {
-    const left = daysBetween(today, m.expiry_date);
+  if (expiry) {
+    const left = daysBetween(today, expiry);
     if (left <= EXPIRING_WINDOW_DAYS) {
       return {
         key: 'expiring',

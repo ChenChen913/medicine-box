@@ -196,6 +196,18 @@ export function normBrand(b?: string): string {
   return (b || '').trim();
 }
 
+/** 零宽字符（零宽空格/连接符/不换行空格）：肉眼看不见，必须显式去掉，否则会得到"空白名字" */
+const ZERO_WIDTH_RE = /[\u200B-\u200D\uFEFF]/g;
+
+/**
+ * 名称规范化：去掉零宽字符后 trim。
+ * 纯空格 / 全零宽的"名字"不是有效药品名 —— 它会让卡片显示成一片空白，
+ * 也会让补货条目无法按名称关联（EX5）。
+ */
+export function normalizeName(v: unknown): string {
+  return String(v ?? '').replace(ZERO_WIDTH_RE, '').trim();
+}
+
 /**
  * 同名药入库时是否视为「同一条药品」（合并入库的判定，与表单实时提示口径一致）：
  * 名称 trim 相等 + 剂型相同 + 品牌规范化后相同。
@@ -693,6 +705,11 @@ export const MedicineService = {
     const data = await readDB();
     if (!data) throw new Error(READ_FAIL_MSG);
 
+    // 名称防御：纯空格 / 全零宽字符的名称一律拒绝（UI 表单已校验，这里是脚本/导入通道的兜底）
+    const name = normalizeName(med.name);
+    if (!name) throw new Error('药品名称不能为空（或仅包含空白/零宽字符）');
+    const incoming: Medicine = { ...med, name };
+
     // 数量防御：与 consumeMedicine / restockMedicine 对称，负数会凭空造出负库存
     const qty = Number(med.total_quantity);
     if (!Number.isFinite(qty) || qty < 0) {
@@ -702,7 +719,7 @@ export const MedicineService = {
       throw new Error('预警阈值必须为数字');
     }
 
-    const idx = data.medicines.findIndex(m => isSameMedicineIdentity(m, med));
+    const idx = data.medicines.findIndex(m => isSameMedicineIdentity(m, incoming));
 
     let merged = false;
     let finalMed: Medicine;
@@ -710,7 +727,7 @@ export const MedicineService = {
       merged = true;
       const existing = data.medicines[idx];
       finalMed = {
-        ...med,
+        ...incoming,
         id: existing.id,
         // 名称保留库内原值：待补货条目按名称关联，改名会让旧提醒变成孤儿
         name: existing.name,
@@ -722,7 +739,7 @@ export const MedicineService = {
       };
       data.medicines[idx] = finalMed;
     } else {
-      finalMed = { ...med, last_purchase_date: med.last_purchase_date || todayDateString() };
+      finalMed = { ...incoming, last_purchase_date: incoming.last_purchase_date || todayDateString() };
       data.medicines.push(finalMed);
     }
 
@@ -776,7 +793,12 @@ export const MedicineService = {
         if (item.status !== ShoppingStatus.PENDING) return true;
         if (item.medicine_name !== target.name) return true;
         if (item.medicine_id) return String(item.medicine_id) !== String(target.id);
-        if (item.brand !== undefined) return true; // 带品牌的旧条目归属其它品牌，保留
+        if (item.brand !== undefined) {
+          // 旧条目只有品牌没有 id：品牌不同 → 属于别的品牌，保留；
+          // 品牌相同 → 还有同名同品牌的其它药品才保留，否则就是这条药品的孤儿提醒，清掉。
+          if (normBrand(item.brand) !== normBrand(target.brand)) return true;
+          return sameNameOthers.some(m => normBrand(m.brand) === normBrand(item.brand));
+        }
         // 无 id 无品牌的旧条目：只有确认没有同名药品了才清理
         return sameNameOthers.length > 0;
       });
@@ -792,7 +814,7 @@ export const MedicineService = {
     // 不合法直接中止（清单条目保留），避免把库存/效期污染成 NaN 或垃圾串
     const qty = Number(newQuantity);
     const expiry = String(newExpiryDate || '').slice(0, 10);
-    if (!Number.isFinite(qty) || qty < 0 || !/^\d{4}-\d{2}-\d{2}$/.test(expiry)) {
+    if (!Number.isFinite(qty) || qty < 0 || !isValidCalendarDate(expiry)) {
       throw new Error('购入数量或有效期格式不正确，本次登记未保存');
     }
 
@@ -903,6 +925,12 @@ export const MedicineService = {
     result.skippedMedicines = (dbRaw.medicines as unknown[]).length - incoming.medicines.length;
     result.skippedLogs = (Array.isArray(dbRaw.logs) ? (dbRaw.logs as unknown[]).length : 0) - incoming.logs.length;
 
+    // 安全闸门：文件里带了药品数据，但清洗后一条都没剩下 —— 说明这是垃圾/投毒备份。
+    // 若照常执行 replace，就会把用户现有药箱"成功地"清空并回报导入成功（EX5 暴露）。
+    if ((dbRaw.medicines as unknown[]).length > 0 && incoming.medicines.length === 0) {
+      throw new Error('备份中的药品数据全部无效（名称为空或字段缺失），已中止导入以免清空现有数据');
+    }
+
     if (mode === 'replace') {
       // 覆盖恢复：整库替换为备份内容
       await writeDB(incoming);
@@ -971,7 +999,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
  * 会让 2024-13-45 / 2025-02-30 / 0000-00-00 这类值原样入库，
  * 且因字典序极大永远不满足 expiry_date < today —— 永远不会过期、永远进不了补货清单。
  */
-function isValidCalendarDate(s: string): boolean {
+export function isValidCalendarDate(s: string): boolean {
   if (!DATE_RE.test(s)) return false;
   const [y, m, d] = s.split('-').map(Number);
   if (y < 1900 || y > 2999 || m < 1 || m > 12 || d < 1) return false;
@@ -1001,9 +1029,11 @@ function sanitizeMedicine(raw: unknown): Medicine | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Record<string, unknown>;
   const id = str(r.id).trim();
-  const name = str(r.name).trim();
+  // 名称清洗：去掉零宽字符（\u200B-\u200D/\uFEFF）再 trim —— 纯空格或全零宽的"空名字"
+  // 属于脏数据，会让卡片显示成一片空白（EX5）。
+  const name = str(r.name).replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
   if (!id || !name) return null;
-  const brand = str(r.brand).trim();
+  const brand = str(r.brand).replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
   const image = sanitizeImageUrl(r.image_url);
   const formType = (Object.values(FormType) as string[]).includes(str(r.form_type))
     ? (r.form_type as FormType)
@@ -1044,7 +1074,8 @@ function sanitizeLog(raw: unknown): UsageLog | null {
     medicine_id: str(r.medicine_id),
     medicine_name: medicineName,
     ...(brand ? { brand } : {}),
-    amount: num(r.amount),
+    // 数量必须非负：负数用量会污染统计口径（EX13），与服务层其他数量防御保持一致
+    amount: nonNegNum(r.amount),
     // 时间非法时兜底为当前时间：避免 Invalid Date 参与排序/按日分组产生 NaN
     log_time: logTime && !Number.isNaN(new Date(logTime).getTime()) ? logTime : new Date().toISOString(),
     ...(user ? { user } : {}),

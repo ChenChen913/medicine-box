@@ -114,7 +114,7 @@ export const DesktopCard: React.FC<{ med: Medicine } & CardActions> = ({ med, on
             <button
               type="button"
               onClick={() => onAddToRestock(med)}
-              className="text-[11px] text-m3-primary hover:underline flex items-center gap-0.5 shrink-0"
+              className="text-[11px] text-m3-primary hover:underline flex items-center gap-0.5 shrink-0 min-h-[24px] px-1 -mx-1 rounded"
             >
               + 加入待购
             </button>
