@@ -213,14 +213,23 @@ const activeInfo = page => page.evaluate(() => {
  * 测试夹具：演示数据已从应用里撤除（不再是产品行为），改由测试自己写入 localStorage。
  * 源文件 backup/medicine-box-demo-backup-20260909.json 是导出信封格式，data 里才是库结构。
  */
-const FIXTURE = JSON.parse(
-  fs.readFileSync(path.join(ROOT, 'backup', 'medicine-box-demo-backup-20260909.json'), 'utf8')
-).data;
+// ⚠️ 注入时把 id 全部改写成 e2e-*：应用会按"演示数据指纹（id 集合）"清理老设备遗留数据，
+// 若夹具沿用原 id 就会被当成遗留演示数据清掉（实测把 G2/G4/G6/G7 打红过）。
+// 只改 id，药名/品牌/数量/效期一律照旧，所有基于文案的断言不受影响。
+const REMAP = src => {
+  const idMap = new Map(src.medicines.map((m, i) => [String(m.id), 'e2e-med-' + (i + 1)]));
+  const mapId = v => (v === undefined || v === null ? v : (idMap.get(String(v)) ?? v));
+  return {
+    medicines: src.medicines.map(m => ({ ...m, id: mapId(m.id) })),
+    shoppingList: src.shoppingList.map(s => ({ ...s, id: 'e2e-shop-' + String(s.id), medicine_id: mapId(s.medicine_id) })),
+    logs: src.logs.map(l => ({ ...l, id: 'e2e-log-' + String(l.id), medicine_id: mapId(l.medicine_id) })),
+  };
+};
+const FIXTURE = REMAP(
+  JSON.parse(fs.readFileSync(path.join(ROOT, 'backup', 'medicine-box-demo-backup-20260909.json'), 'utf8')).data
+);
 const PROD_RESET_FLAG = 'smart-medicine-box:prod-reset:v1';
-// 应用会按指纹清掉"老设备遗留的演示数据"。测试是主动注入夹具，必须同时写上清理标记，
-// 否则夹具会被当成遗留数据清空（本迁移上线时就把 G2/G4/G6/G7 打红过，是真拦住了）。
-const DEMO_CLEANUP_FLAG = 'smart-medicine-box:demo-cleanup:v1';
-const SEED_FLAGS = [PROD_RESET_FLAG, DEMO_CLEANUP_FLAG];
+const SEED_FLAGS = [PROD_RESET_FLAG];
 
 /**
  * 打开应用。默认先把夹具写进 localStorage（多数用例需要药箱里有药）；

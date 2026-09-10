@@ -250,17 +250,15 @@ const PROD_RESET_FLAG = 'smart-medicine-box:prod-reset:v1';
  * 安全性：只按**指纹**识别（药品 id 集合与演示数据完全一致），指纹不符说明是用户自己的真实数据，
  * 一个字都不动。标记只写一次，跑过就不再检查。
  */
-const DEMO_CLEANUP_FLAG = 'smart-medicine-box:demo-cleanup:v1';
 /** 演示数据的药品 id 集合（默认字典序排序后拼接），取自 backup/medicine-box-demo-backup-20260909.json */
 const LEGACY_DEMO_IDS = '1,10,11,12,13,14,15,16,17,18,19,2,20,3,4,5,6,7,8,9,seed-amox-b';
 
+/**
+ * 刻意**不用"只跑一次"标记**：标记会在首次加载（此时药箱可能是空的）就被消费掉，
+ * 等数据出现时反而不检查了 —— 实测踩过这个坑。改为每次读取都按指纹判断：
+ * 21 条数据的集合比较可忽略不计，且幂等（清空后签名变成空串，自然不再匹配）。
+ */
 function cleanupSeededDemoData(data: DBStructure): boolean {
-  try {
-    if (localStorage.getItem(DEMO_CLEANUP_FLAG)) return false;
-    localStorage.setItem(DEMO_CLEANUP_FLAG, new Date().toISOString());
-  } catch {
-    return false; // 存储不可用：交给上层的读失败通道，不在这里硬来
-  }
   const sig = data.medicines.map(m => String(m.id)).sort().join(',');
   if (sig !== LEGACY_DEMO_IDS) return false; // 不是演示数据 → 绝不改动
   data.medicines = [];
