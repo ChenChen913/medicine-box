@@ -916,6 +916,43 @@ async function main() {
         await dp.close();
       }
 
+      // G9.10 弹层尺寸稳定：不同月份行数不同（4~6 行）、日/月/年视图切换，都不应改变高度
+      {
+        const sp = await newPage(browser, 390, 844, true);
+        await openApp(sp);
+        await sp.evaluate(() => {
+          const add = Array.from(document.querySelectorAll('button,[role=button]'))
+            .find(x => (((x.innerText || '') + ' ' + (x.getAttribute('aria-label') || '')).trim()) === '入库新药');
+          if (add) add.click();
+        });
+        await sp.waitForSelector('[role=dialog]', { timeout: 15000 }); await sleep(900);
+        await realClickByAria(sp, '有效截止日期');
+        await sleep(800);
+        const heights = [];
+        const measure = () => sp.evaluate(() => {
+          const el = document.querySelector('[role=dialog][aria-label^="有效截止日期"]');
+          return el ? Math.round(el.getBoundingClientRect().height) : -1;
+        });
+        heights.push(await measure());
+        // 连续翻 8 个月（覆盖 28/29/30/31 天与不同起始星期的组合）
+        for (let i = 0; i < 8; i++) {
+          await sp.evaluate(() => { const b = Array.from(document.querySelectorAll('button')).find(x => (x.getAttribute('aria-label') || '') === '下一页'); if (b) b.click(); });
+          await sleep(280);
+          heights.push(await measure());
+        }
+        // 年月视图
+        await sp.evaluate(() => { const b = Array.from(document.querySelectorAll('button')).find(x => (x.getAttribute('aria-label') || '') === '选择年份'); if (b) b.click(); });
+        await sleep(350); heights.push(await measure());
+        await sp.evaluate(() => { const b = Array.from(document.querySelectorAll('button')).find(x => (x.innerText || '').trim() === '2030'); if (b) b.click(); });
+        await sleep(350);
+        await sp.evaluate(() => { const b = Array.from(document.querySelectorAll('button')).find(x => (x.getAttribute('aria-label') || '') === '选择月份'); if (b) b.click(); });
+        await sleep(350); heights.push(await measure());
+        const min = Math.min(...heights);
+        const max = Math.max(...heights);
+        record('G9.10', '日期弹层高度恒定（翻月 + 年月视图切换都不变）', min > 0 && max - min <= 1, '各次高度=' + JSON.stringify(heights));
+        await sp.close();
+      }
+
       record('G9.7', '新日期选择器：可一键跳到年份网格并选中年份/日期',
         String(yearPicked).startsWith('20') && String(dayPicked).startsWith('20') && shown.includes('年'),
         '打开=' + opened + ' 年份按钮=' + yearJump + ' 选中=' + yearPicked + '-' + dayPicked + ' 触发按钮显示=' + shown);

@@ -62,10 +62,13 @@ const PickerDialog: React.FC<{
 
   const firstWeekday = new Date(view.y, view.m - 1, 1).getDay();
   const total = daysInMonth(view.y, view.m);
+  // 固定 6 行（42 格）：不同月份占 4~6 行，若按实际行数渲染，切月时弹层高度会跳
+  // （老板反馈："从 9 月切到 10 月，日期矩阵多一行，选择框就变大一点"）。
   const cells: (number | null)[] = [
     ...Array.from({ length: firstWeekday }, () => null),
     ...Array.from({ length: total }, (_, i) => i + 1),
   ];
+  while (cells.length < 42) cells.push(null);
   const isSelected = (d: number): boolean => initial.y === view.y && initial.m === view.m && initial.d === d;
 
   return createPortal(
@@ -114,23 +117,30 @@ const PickerDialog: React.FC<{
           </button>
         </div>
 
+        {/* 内容区固定高度：日期视图 = 星期行(28) + 6 行日期(6×40) + 行间距(5×4) + 间距(4) = 292px；
+            年月视图放进同样高度的盒子里居中，这样在"日 / 月 / 年"三种视图之间切换也不会跳高度 */}
+        <div className="h-[292px]">
         {showYears ? (
-          <div className="grid grid-cols-4 gap-1">
-            {Array.from({ length: 12 }, (_, i) => pageStart + i).map(y => (
-              <button key={y} type="button" onClick={() => { setView(v => ({ ...v, y })); setShowYears(false); }}
-                className={`h-11 rounded-xl text-sm font-semibold ${y === view.y ? 'bg-m3-primary text-m3-on-primary' : 'hover:bg-m3-surface-container text-m3-on-surface'}`}>
-                {y}
-              </button>
-            ))}
+          <div className="h-full flex items-center">
+            <div className="w-full grid grid-cols-4 gap-1">
+              {Array.from({ length: 12 }, (_, i) => pageStart + i).map(y => (
+                <button key={y} type="button" onClick={() => { setView(v => ({ ...v, y })); setShowYears(false); }}
+                  className={`h-12 rounded-xl text-sm font-semibold ${y === view.y ? 'bg-m3-primary text-m3-on-primary' : 'hover:bg-m3-surface-container text-m3-on-surface'}`}>
+                  {y}
+                </button>
+              ))}
+            </div>
           </div>
         ) : showMonths ? (
-          <div className="grid grid-cols-4 gap-1">
-            {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-              <button key={m} type="button" onClick={() => { setView(v => ({ ...v, m })); setShowMonths(false); }}
-                className={`h-11 rounded-xl text-sm font-semibold ${m === view.m ? 'bg-m3-primary text-m3-on-primary' : 'hover:bg-m3-surface-container text-m3-on-surface'}`}>
-                {m}月
-              </button>
-            ))}
+          <div className="h-full flex items-center">
+            <div className="w-full grid grid-cols-4 gap-1">
+              {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                <button key={m} type="button" onClick={() => { setView(v => ({ ...v, m })); setShowMonths(false); }}
+                  className={`h-12 rounded-xl text-sm font-semibold ${m === view.m ? 'bg-m3-primary text-m3-on-primary' : 'hover:bg-m3-surface-container text-m3-on-surface'}`}>
+                  {m}月
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
           <>
@@ -153,6 +163,7 @@ const PickerDialog: React.FC<{
             </div>
           </>
         )}
+        </div>
 
         <div className="flex items-center justify-between mt-3 pt-3 border-t border-m3-surface-container-low">
           <button type="button" onClick={() => onPick(ymd(today.y, today.m, today.d))}
