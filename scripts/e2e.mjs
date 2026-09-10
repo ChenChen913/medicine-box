@@ -1075,6 +1075,98 @@ async function main() {
       }
     }
 
+    /* ============ G11 交互缺陷回归（2026-09-10 老板手动测试发现） ============ */
+    group('G11 交互缺陷回归');
+    {
+      // BUG-12：初始入库数量清不掉（parseFloat('')||0 → 0；输入 50 变 050）
+      const p = await newPage(browser, 1440, 900);
+      await openApp(p);
+      await realClick(p, '入库新药');
+      await p.waitForSelector('[role=dialog]', { timeout: 15000 }); await sleep(800);
+      const qtySel = '[role=dialog] input[placeholder="如：24"]';
+      await p.click(qtySel, { clickCount: 3 });
+      await p.keyboard.press('Backspace');
+      await sleep(250);
+      const afterClear = await p.$eval(qtySel, el => el.value);
+      record('G11.1', '初始入库数量可以清空（清空后不是「删不掉的 0」）', afterClear === '', '清空后 value=' + JSON.stringify(afterClear));
+      await p.keyboard.type('50');
+      await sleep(250);
+      const afterType = await p.$eval(qtySel, el => el.value);
+      record('G11.2', '清空后输入 50 显示 50（不是 050）', afterType === '50', '输入后 value=' + JSON.stringify(afterType));
+      await setInput(p, '药品名称', 'G11数量药');
+      await setDate(p, '2027-12-31'); // 表单必填项，漏了会被原生校验挡住（第一次写这条用例时就踩了）
+      await clickLabel(p, '确认入库');
+      await waitDb(p, d => (d.medicines || []).some(m => m.name === 'G11数量药'));
+      const db = await readDB(p);
+      const saved = (db.medicines || []).find(m => m.name === 'G11数量药') || {};
+      record('G11.3', '按输入值精确入库（50，不是 0 也不是 050 解析异常）', saved.total_quantity === 50, '落库数量=' + saved.total_quantity);
+      // 小数：输 "2.5" 中途的 "2." 不能被吃掉
+      await realClick(p, '入库新药');
+      await p.waitForSelector('[role=dialog]', { timeout: 15000 }); await sleep(700);
+      await p.click(qtySel, { clickCount: 3 });
+      await p.keyboard.press('Backspace');
+      await p.keyboard.type('2.5');
+      await sleep(250);
+      const decimal = await p.$eval(qtySel, el => el.value);
+      record('G11.4', '小数数量可正常输入（2.5 不被吞成 25 或 2）', decimal === '2.5', 'value=' + JSON.stringify(decimal));
+      await p.evaluate(() => { const x = document.querySelector('[role=dialog] button[aria-label="关闭"]'); if (x) x.click(); });
+      await p.close();
+
+      // BUG-13：手机端点详情抽屉出现黑影闪动/抖动
+      const m = await newPage(browser, 390, 844, true);
+      await openApp(m);
+      const flicker = await m.evaluate(async () => {
+        const btns = Array.from(document.querySelectorAll('button')).filter(b => (b.innerText || '').trim() === '详情');
+        const cands = btns.map(b => { let el = b; for (let i = 0; i < 8 && el; i++, el = el.parentElement) { const t = el.innerText || ''; if (t.includes('布洛芬')) return { b, len: t.length }; } return null; })
+          .filter(Boolean).sort((x, y) => x.len - y.len);
+        if (!cands.length) return { err: 'NO_CARD' };
+        // ⚠️ 必须在点击之后逐帧重新查询：弹层是点击才挂载的，
+        // 点击前抓一次列表会得到空数组，采样全是 -1，断言就变成"空洞通过"（本用例第一版就踩了）。
+        const alphaOf = el => {
+          const bg = getComputedStyle(el).backgroundColor;
+          const mm = bg.match(/rgba?\(([^)]+)\)/);
+          if (!mm) return 0;
+          const parts = mm[1].split(',');
+          return parts.length < 4 ? 1 : parseFloat(parts[3]);
+        };
+        const darkOverlays = () => Array.from(document.querySelectorAll('.fixed.inset-0')).filter(el => alphaOf(el) > 0.05);
+        cands[0].b.click();
+        const opacities = [];
+        const heights = [];
+        let maxDark = 0;
+        for (let i = 0; i < 24; i++) {
+          await new Promise(r => setTimeout(r, 45));
+          const ovs = darkOverlays();
+          maxDark = Math.max(maxDark, ovs.length);
+          opacities.push(ovs.length ? parseFloat(getComputedStyle(ovs[0]).opacity) : -1);
+          const panel = document.querySelector('[role=dialog]');
+          heights.push(panel ? Math.round(panel.getBoundingClientRect().height) : 0);
+        }
+        const overlayDump = Array.from(document.querySelectorAll('.fixed.inset-0'))
+          .map(el => (el.className || '').toString().slice(0, 46) + ' α=' + alphaOf(el).toFixed(2));
+        const blur = darkOverlays().map(el => getComputedStyle(el).backdropFilter || 'none');
+        return {
+          overlayCount: maxDark,
+          overlayDump,
+          blur,
+          opacities,
+          minH: Math.min(...heights), maxH: Math.max(...heights),
+          tapHighlight: getComputedStyle(document.body).webkitTapHighlightColor,
+        };
+      });
+      record('G11.5', '手机端详情只有一层深色遮罩（不叠加变暗）', flicker.overlayCount === 1, 'overlayCount=' + flicker.overlayCount + ' 全部 fixed.inset-0=' + JSON.stringify(flicker.overlayDump));
+      record('G11.6', '遮罩不使用 backdrop-filter（移动端合成层闪烁源）', Array.isArray(flicker.blur) && flicker.blur.every(b => b === 'none'), 'backdropFilter=' + JSON.stringify(flicker.blur));
+      // 先要求"确实采到了遮罩"（已知至少 20 帧可见），再要求透明度单调不减 ——
+      // 否则全 -1 的空数组也能让断言通过，等于没测。
+      record('G11.7', '打开过程中遮罩透明度单调递增（无闪回/闪烁）',
+        Array.isArray(flicker.opacities) && flicker.opacities.filter(v => v >= 0).length >= 10
+          && flicker.opacities.filter(v => v >= 0).every((v, i, arr) => i === 0 || v >= arr[i - 1] - 0.02),
+        'opacity 采样=' + JSON.stringify(flicker.opacities));
+      record('G11.8', '抽屉打开后高度稳定（不抖动）', flicker.maxH - flicker.minH <= 2 && flicker.maxH > 100, 'min=' + flicker.minH + ' max=' + flicker.maxH);
+      record('G11.9', '已关闭移动端点击高亮（消除点按瞬间的黑影）', flicker.tapHighlight === 'rgba(0, 0, 0, 0)', 'tapHighlight=' + flicker.tapHighlight);
+      await m.close();
+    }
+
   } finally {
     try { await BROWSER.close(); } catch { /* ignore */ }
     try { server.kill(); } catch { /* ignore */ }

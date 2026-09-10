@@ -4,6 +4,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 关掉移动端点击高亮：默认的灰/黑色高亮块在点卡片、点按钮时会"闪一下黑影"，
+   与本应用自己的按压反馈（缩放/涟漪）叠加后看起来就是闪烁。 */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* 页面底色（原 index.html 内联样式迁移至此） */
 body {
   background-color: #f8fafc;

@@ -74,7 +74,7 @@ const PickerDialog: React.FC<{
   return createPortal(
     // 手机底部抽屉 / 桌面居中卡片；z-index 高于普通弹窗（70）与遮罩
     <div className="fixed inset-0 z-[95] flex items-end sm:items-center justify-center sm:p-4">
-      <div className="absolute inset-0 bg-m3-on-surface/40 backdrop-blur-[2px] animate-in fade-in duration-150" onClick={onClose} />
+      <div className="absolute inset-0 bg-m3-on-surface/40 animate-in fade-in duration-150" onClick={onClose} />
       <div
         ref={panelRef}
         tabIndex={-1}

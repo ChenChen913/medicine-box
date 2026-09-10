@@ -32,7 +32,7 @@ export const ModalShell: React.FC<{ title: string; subtitle?: string; icon?: Ico
   return (
   // 手机端 items-end 贴底呈抽屉形态，桌面端保持居中卡片
   <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-4">
-    <div className="fixed inset-0 bg-m3-on-surface/40 backdrop-blur-[2px] animate-in fade-in duration-200" onClick={onClose} />
+    <div className="fixed inset-0 bg-m3-on-surface/40 animate-in fade-in duration-200" onClick={onClose} />
     <div
       ref={panelRef}
       tabIndex={-1}
@@ -241,6 +241,17 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, allMedicines, pendi
   );
   // 图片状态：form.image_url 持有当前图（含历史 data:URL）；imageRemoved 标记用户
   // 已明确选择「不上传图片，使用分类默认图」，提交时必须清掉旧图而不是保留
+  // 数量类输入框保留「用户敲进去的原始文本」：
+  // 直接把 value 绑到 number 并 onChange 里 parseFloat，会有两个致命交互问题 ——
+  // ① 清空时 parseFloat('') = NaN，被 || 0 兜成 0，用户根本删不掉默认值（输入 50 变成 "050"）；
+  // ② 输 "2." 时 parseFloat 得到 2，小数点被吃掉，永远输不进 2.5。
+  // 这里文本与数值分开：文本进 state 显示，数值仅在能解析时同步给表单，提交时再兜底。
+  const [qtyText, setQtyText] = useState(() => String((editing ? editing.total_quantity : 1) ?? ''));
+  const [thresholdText, setThresholdText] = useState(() => String((editing ? editing.threshold : 5) ?? ''));
+  const syncNum = (raw: string, key: 'total_quantity' | 'threshold') => {
+    const n = parseFloat(raw);
+    setForm(prev => ({ ...prev, [key]: raw.trim() === '' ? undefined : (Number.isFinite(n) ? n : prev[key]) }));
+  };
   const [imageRemoved, setImageRemoved] = useState(false);
   // 提交失败提示（服务层抛错时展示，表单保留、已填内容不丢）
   const [submitError, setSubmitError] = useState('');
@@ -484,7 +495,7 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, allMedicines, pendi
           <label className="flex flex-col gap-1.5 col-span-2">
             <span className={labelCls}>初始入库数量</span>
             <div className="flex gap-2">
-              <input required type="number" min="0" step="any" className={inputCls} value={form.total_quantity ?? ''} onChange={e => setForm({ ...form, total_quantity: parseFloat(e.target.value) || 0 })} placeholder="如：24" />
+              <input required type="number" min="0" step="any" className={inputCls} value={qtyText} onChange={e => { setQtyText(e.target.value); syncNum(e.target.value, 'total_quantity'); }} placeholder="如：24" />
               <M3Select
                 variant="compact"
                 ariaLabel="数量单位"
@@ -497,7 +508,7 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, allMedicines, pendi
           </label>
           <label className="flex flex-col gap-1.5 col-span-1">
             <span className={labelCls}>预警阈值</span>
-            <input required type="number" min="0" step="any" className={inputCls} value={form.threshold ?? ''} onChange={e => setForm({ ...form, threshold: parseFloat(e.target.value) || 0 })} />
+            <input required type="number" min="0" step="any" className={inputCls} value={thresholdText} onChange={e => { setThresholdText(e.target.value); syncNum(e.target.value, 'threshold'); }} />
           </label>
           <label className="flex flex-col gap-1.5 col-span-1">
             <span className={labelCls}>有效截止日期</span>

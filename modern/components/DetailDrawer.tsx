@@ -90,7 +90,9 @@ export const DetailDrawer: React.FC<Props> = ({ med, logs, onClose, onConsume, o
   return (
     <>
       {/* 背景遮罩：点击空白处直接关闭（单手友好） */}
-      <div className="fixed inset-0 bg-m3-on-surface/30 backdrop-blur-[2px] z-[60] animate-in fade-in duration-200" onClick={onClose} />
+      {/* 遮罩不放 backdrop-blur：全屏 backdrop-filter 在手机上会让整屏每帧多一次合成，
+      配合入场淡入动画就是肉眼可见的"黑影抖动/闪动"（老板手机端反复反馈过）。30% 深色已足够。 */}
+      <div className="fixed inset-0 bg-m3-on-surface/30 z-[60] animate-in fade-in duration-150" onClick={onClose} />
 
       {/* 弹窗容器：手机端贴底抽屉 / 桌面端居中；pointer-events-none 让空白区域点击穿透到遮罩 */}
       <div className="fixed inset-0 z-[61] flex items-end md:items-center justify-center md:p-4 pointer-events-none">
