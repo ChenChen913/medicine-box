@@ -142,9 +142,6 @@ export const MobileCard: React.FC<{ med: Medicine } & CardActions> = ({ med, onR
     <div
       className="p-4 rounded-2xl bg-m3-surface-container-lowest shadow-[0_4px_20px_-2px_rgba(15,118,110,0.05)] flex flex-col gap-3"
       onClick={() => onOpenDetail(med)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenDetail(med); } }}
     >
       <CardHead med={med} subtitle={`${med.form_type}${med.brand ? ' · ' + med.brand : ''}${med.symptoms_treated ? ' · ' + med.symptoms_treated.split(',')[0] : ''}`} />
 
@@ -172,7 +169,16 @@ export const MobileCard: React.FC<{ med: Medicine } & CardActions> = ({ med, onR
       {/* 操作区：打卡。补货清单完全由规则产生（过期 / 用完），不再提供"手动加入"入口 */}
       <div className="flex items-center justify-between gap-2">
         <DosageLine med={med} className="flex-1" />
-        <span onClick={e => e.stopPropagation()} role="presentation">
+        <span onClick={e => e.stopPropagation()} role="presentation" className="flex items-center gap-1.5 shrink-0">
+          {/* 键盘可达入口：整卡 onClick 只是鼠标/触屏便捷；父级若再声明 role=button
+              就与内层「吃药打卡」按钮构成嵌套交互元素（axe nested-interactive，18 张卡片全中） */}
+          <button
+            type="button"
+            onClick={() => onOpenDetail(med)}
+            className="px-2.5 py-1.5 rounded-full text-m3-on-surface-variant hover:text-m3-primary hover:bg-m3-surface-container-low text-xs transition-colors"
+          >
+            详情
+          </button>
           <ConsumeButton med={med} onClick={() => onRequestConsume(med)} />
         </span>
       </div>

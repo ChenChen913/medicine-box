@@ -17,3 +17,12 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/**
+ * Vite 的 `?raw` 后缀导入：把文件内容作为字符串内联进包体（同步可得，无需网络往返）。
+ * index.tsx 用它内联演示数据，避免"等 fetch 回来才挂载 React"造成的首屏 CLS 0.9。
+ */
+declare module '*?raw' {
+  const content: string;
+  export default content;
+}

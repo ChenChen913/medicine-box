@@ -25,7 +25,7 @@ export type CardActions = {
 
 const METRIC_DEFS: { key: FilterKey; label: string; icon: IconName; iconWrap: string; valueClass: string; footClass: string }[] = [
   { key: 'all', label: '全部储备种类', icon: 'inventory_2', iconWrap: 'bg-m3-primary/10 text-m3-primary', valueClass: 'text-m3-on-surface', footClass: 'text-m3-primary' },
-  { key: 'low', label: '库存告急', icon: 'notifications_active', iconWrap: 'bg-m3-tertiary-fixed text-m3-tertiary-container', valueClass: 'text-m3-tertiary', footClass: 'text-m3-tertiary' },
+  { key: 'low', label: '库存告急', icon: 'notifications_active', iconWrap: 'bg-m3-tertiary-fixed text-m3-on-tertiary-fixed-variant', valueClass: 'text-m3-tertiary', footClass: 'text-m3-tertiary' },
   { key: 'expired', label: '已过期/待清理', icon: 'event_busy', iconWrap: 'bg-m3-error-container text-m3-error', valueClass: 'text-m3-error', footClass: 'text-m3-error' },
   { key: 'normal', label: '正常备用', icon: 'check_circle', iconWrap: 'bg-m3-primary-fixed/40 text-m3-primary', valueClass: 'text-m3-primary', footClass: 'text-m3-primary' },
 ];
@@ -146,7 +146,7 @@ function matchPinyin(m: Medicine, ql: string, index: PinyinIndex | null): boolea
 const FILTERS: { key: FilterKey; label: string; badgeCls: string }[] = [
   { key: 'all', label: '全部', badgeCls: 'bg-m3-surface-container text-m3-on-surface-variant' },
   { key: 'normal', label: '正常备用', badgeCls: 'bg-m3-surface-container text-m3-on-surface-variant' },
-  { key: 'low', label: '库存不足', badgeCls: 'bg-m3-tertiary-fixed text-m3-tertiary-container' },
+  { key: 'low', label: '库存不足', badgeCls: 'bg-m3-tertiary-fixed text-m3-on-tertiary-fixed-variant' },
   { key: 'expiring', label: '临期 30 天', badgeCls: 'bg-m3-surface-container text-m3-on-surface-variant' },
   { key: 'expired', label: '已过期需清理', badgeCls: 'bg-m3-error-container text-m3-error' },
 ];

@@ -2,6 +2,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { ErrorBoundary } from './modern/components/ErrorBoundary';
+// 静态导入：服务层已被 ModernApp 静态引用（同一 chunk），此处再写动态 import 不会分包，
+// 反而会让构建产出 [INEFFECTIVE_DYNAMIC_IMPORT] 告警（B7.2「无新增告警」断言）。
+import { MedicineService } from './services/medicineService';
 import './index.css';
 
 const rootElement = document.getElementById('root');
@@ -20,12 +23,11 @@ if (!rootElement) {
  * 撤销方式：删除本段 + public/demo-backup.json，并把下面的挂载改回直接 render。
  * ============================================================ */
 const DEMO_FLAG = 'smart-medicine-box:prod-reset:v1'; // 投产清空标记，必须同步写上（见下）
-const DEMO_SOURCE = 'demo-backup.json';
+// raw 后缀让 Vite 把 JSON 作为字符串内联（同步可得，无需网络往返）
+import DEMO_BACKUP_TEXT from './public/demo-backup.json?raw';
 
 async function loadDemoDataIfNeeded(): Promise<void> {
   const force = new URLSearchParams(window.location.search).get('demo') === '1';
-
-  const { MedicineService } = await import('./services/medicineService');
 
   let existing: unknown[];
   try {
@@ -46,10 +48,11 @@ async function loadDemoDataIfNeeded(): Promise<void> {
     if (!ok) return;
   }
 
-  const res = await fetch(import.meta.env.BASE_URL + DEMO_SOURCE, { cache: 'no-store' });
-  if (!res.ok) throw new Error('演示数据文件拉取失败（HTTP ' + res.status + '）');
-
-  const result = await MedicineService.importData(await res.text(), 'replace');
+  // 用静态 import 而不是 fetch：省掉一次网络往返（演示数据文件不存在/弱网时
+  // 原本要空等 2.5 秒才渲染）。代价是演示数据（15.7 kB）进入包体 —— 本段是临时功能，撤除时一并消失。
+  // 注：曾以为它能修掉首屏 CLS 0.9 —— **实测无效**，真正的成因是应用挂载之后的异步数据读取
+  //     （首帧渲染空壳 → 数据到达后内容整体出现），见 docs/ACCEPTANCE.md §11.2 N7。
+  const result = await MedicineService.importData(DEMO_BACKUP_TEXT, 'replace');
 
   // 关键：补写"投产清空"一次性迁移标记。
   // 否则在从未打开过本应用的新设备上，首次读取数据会把刚导入的演示数据当遗留数据清空

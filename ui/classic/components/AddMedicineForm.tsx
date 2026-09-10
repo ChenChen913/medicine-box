@@ -133,14 +133,14 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess, editingMed }) =>
   };
 
   const inputClass = "w-full border border-slate-200 rounded-lg p-3 focus:ring-2 focus:ring-emerald-500 outline-none bg-white text-slate-800 placeholder-slate-400 h-12";
-  const labelClass = "block text-xs font-bold text-slate-500 mb-1.5 uppercase";
+  const labelClass = "block text-xs font-bold text-slate-600 mb-1.5 uppercase";
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
       <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
         <div className="p-4 border-b border-slate-100 sticky top-0 bg-white z-10 flex justify-between items-center">
           <h2 className="text-xl font-bold text-slate-800">{editingMed ? '编辑药品信息' : '添加新药品'}</h2>
-          <button onClick={onClose} aria-label="关闭表单" className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
+          <button onClick={onClose} aria-label="关闭表单" className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">✕</button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
@@ -153,8 +153,8 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess, editingMed }) =>
                 <img src={previewImage} alt="Preview" className="w-full h-full object-cover" />
               ) : (
                 <>
-                  <span className="text-3xl text-slate-300 group-hover:text-emerald-400 transition-colors">+</span>
-                  <span className="text-xs text-slate-400 mt-2 font-medium">上传图片</span>
+                  <span className="text-3xl text-slate-600 group-hover:text-emerald-700 transition-colors">+</span>
+                  <span className="text-xs text-slate-600 mt-2 font-medium">上传图片</span>
                 </>
               )}
               <input type="file" accept="image/*" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" />
@@ -239,25 +239,25 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess, editingMed }) =>
              <label className={`${labelClass} mb-3`}>服用方式 (自动生成说明)</label>
              <div className="flex items-center gap-3">
                <div className="flex-1 flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 h-12">
-                 <span className="text-slate-400 text-sm whitespace-nowrap">每日</span>
+                 <span className="text-slate-600 text-sm whitespace-nowrap">每日</span>
                  <input 
                    type="number" step="0.5" 
                    className="w-full outline-none font-bold text-center bg-white" 
                    value={dosageFreq}
                    onChange={e => setDosageFreq(e.target.value)}
                   />
-                 <span className="text-slate-400 text-sm whitespace-nowrap">次</span>
+                 <span className="text-slate-600 text-sm whitespace-nowrap">次</span>
                </div>
-               <span className="text-slate-300">×</span>
+               <span className="text-slate-600">×</span>
                <div className="flex-1 flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 h-12">
-                 <span className="text-slate-400 text-sm whitespace-nowrap">每次</span>
+                 <span className="text-slate-600 text-sm whitespace-nowrap">每次</span>
                  <input 
                    type="number" step="0.5" 
                    className="w-full outline-none font-bold text-center bg-white"
                    value={dosageAmount}
                    onChange={e => setDosageAmount(e.target.value)}
                   />
-                 <span className="text-slate-400 text-sm whitespace-nowrap">{formData.unit}</span>
+                 <span className="text-slate-600 text-sm whitespace-nowrap">{formData.unit}</span>
                </div>
              </div>
           </div>

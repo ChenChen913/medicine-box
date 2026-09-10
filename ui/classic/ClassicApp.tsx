@@ -19,7 +19,7 @@ import { useDialogA11y } from '../../modern/useDialogA11y';
 const IconHome = () => <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>;
 const IconCart = () => <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>;
 const IconAdd = () => <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>;
-const IconSearch = () => <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>;
+const IconSearch = () => <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>;
 
 function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'cart'>('home');
@@ -210,13 +210,13 @@ function App() {
              />
              <div>
                <h1 className="font-bold text-xl md:text-2xl text-slate-800 leading-none tracking-tight">家庭药箱</h1>
-               <p className="text-xs md:text-sm text-slate-400 mt-1 font-medium">家庭健康管家</p>
+               <p className="text-xs md:text-sm text-slate-600 mt-1 font-medium">家庭健康管家</p>
              </div>
           </div>
           
           <div className="hidden md:flex gap-6">
-             <button onClick={() => setActiveTab('home')} className={`px-6 py-2.5 rounded-xl font-bold transition-colors ${activeTab === 'home' ? 'bg-emerald-50 text-emerald-600' : 'text-slate-500 hover:text-slate-800'}`}>我的药箱</button>
-             <button onClick={() => setActiveTab('cart')} className={`px-6 py-2.5 rounded-xl font-bold transition-colors ${activeTab === 'cart' ? 'bg-emerald-50 text-emerald-600' : 'text-slate-500 hover:text-slate-800'}`}>需补货</button>
+             <button onClick={() => setActiveTab('home')} className={`px-6 py-2.5 rounded-xl font-bold transition-colors ${activeTab === 'home' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:text-slate-800'}`}>我的药箱</button>
+             <button onClick={() => setActiveTab('cart')} className={`px-6 py-2.5 rounded-xl font-bold transition-colors ${activeTab === 'cart' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:text-slate-800'}`}>需补货</button>
           </div>
           
           <div className="flex items-center gap-2">
@@ -225,7 +225,7 @@ function App() {
               onClick={() => setBackupOpen(true)}
               aria-label="数据备份与恢复"
               title="数据备份与恢复"
-              className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:text-emerald-600 hover:border-emerald-300 transition-colors"
+              className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:text-emerald-700 hover:border-emerald-300 transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 7h14M5 7a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2m-7 3l3 3m0 0l-3 3m3-3H9" /></svg>
             </button>
@@ -276,20 +276,20 @@ function App() {
             {/* 统计概览 */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8">
               <div onClick={() => setFilterType('all')} className={`p-4 rounded-2xl border transition-all cursor-pointer ${filterType === 'all' ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-100' : 'bg-white border-slate-100'}`}>
-                <div className="text-slate-500 text-xs md:text-sm font-medium">总库存种类</div>
+                <div className="text-slate-600 text-xs md:text-sm font-medium">总库存种类</div>
                 <div className="text-2xl md:text-3xl font-bold text-slate-800 mt-1">{stats.total}</div>
               </div>
               <div onClick={() => setFilterType('low')} className={`p-4 rounded-2xl border transition-all cursor-pointer ${filterType === 'low' ? 'bg-orange-50 border-orange-200 ring-2 ring-orange-100' : 'bg-white border-slate-100'}`}>
-                 <div className="text-slate-500 text-xs md:text-sm font-medium">库存告急</div>
-                 <div className="text-2xl md:text-3xl font-bold text-orange-500 mt-1">{stats.low}</div>
+                 <div className="text-slate-600 text-xs md:text-sm font-medium">库存告急</div>
+                 <div className="text-2xl md:text-3xl font-bold text-orange-700 mt-1">{stats.low}</div>
               </div>
                <div onClick={() => setFilterType('out')} className={`p-4 rounded-2xl border transition-all cursor-pointer ${filterType === 'out' ? 'bg-gray-100 border-gray-300 ring-2 ring-gray-200' : 'bg-white border-slate-100'}`}>
-                 <div className="text-slate-500 text-xs md:text-sm font-medium">已用尽</div>
-                 <div className="text-2xl md:text-3xl font-bold text-gray-500 mt-1">{stats.out}</div>
+                 <div className="text-slate-600 text-xs md:text-sm font-medium">已用尽</div>
+                 <div className="text-2xl md:text-3xl font-bold text-gray-600 mt-1">{stats.out}</div>
               </div>
               <div onClick={() => setFilterType('expired')} className={`p-4 rounded-2xl border transition-all cursor-pointer ${filterType === 'expired' ? 'bg-red-50 border-red-200 ring-2 ring-red-100' : 'bg-white border-slate-100'}`}>
-                 <div className="text-slate-500 text-xs md:text-sm font-medium">已过期</div>
-                 <div className="text-2xl md:text-3xl font-bold text-red-500 mt-1">{stats.expired}</div>
+                 <div className="text-slate-600 text-xs md:text-sm font-medium">已过期</div>
+                 <div className="text-2xl md:text-3xl font-bold text-red-600 mt-1">{stats.expired}</div>
               </div>
             </div>
 
@@ -300,14 +300,14 @@ function App() {
                 <div className="text-center py-20 bg-white rounded-2xl shadow-sm border border-dashed border-slate-200">
                   <div className="text-4xl mb-4">💊</div>
                   <div className="text-slate-600 font-medium">药箱还是空的</div>
-                  <div className="hidden md:block text-slate-400 text-sm mt-2">点击右上角「入库新药」按钮，录入您的第一种药品</div>
-                  <div className="md:hidden text-slate-400 text-sm mt-2">点击底部中央 + 按钮，录入您的第一种药品</div>
+                  <div className="hidden md:block text-slate-600 text-sm mt-2">点击右上角「入库新药」按钮，录入您的第一种药品</div>
+                  <div className="md:hidden text-slate-600 text-sm mt-2">点击底部中央 + 按钮，录入您的第一种药品</div>
                 </div>
               ) : (
                 <div className="text-center py-20">
                   <div className="text-4xl mb-4">🔍</div>
-                  <div className="text-slate-400 font-medium">没有找到相关药品</div>
-                  {searchQuery && <div className="text-slate-300 text-sm mt-2">试试其他关键词？</div>}
+                  <div className="text-slate-600 font-medium">没有找到相关药品</div>
+                  {searchQuery && <div className="text-slate-600 text-sm mt-2">试试其他关键词？</div>}
                 </div>
               )
             ) : (
@@ -316,7 +316,7 @@ function App() {
                   <h2 className="text-lg md:text-xl font-bold text-slate-700 mb-4 flex items-center gap-2 pl-1">
                     <span className="w-1.5 h-5 md:h-6 bg-emerald-500 rounded-full block"></span>
                     {category}
-                    <span className="text-xs md:text-sm font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full ml-2">{groupedMedicines[category].length}</span>
+                    <span className="text-xs md:text-sm font-normal text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full ml-2">{groupedMedicines[category].length}</span>
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                     {groupedMedicines[category].map(med => (
@@ -344,7 +344,7 @@ function App() {
       <nav className="md:hidden shrink-0 bg-white border-t border-slate-200 flex justify-around items-center h-20 z-30 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         <button 
           onClick={() => { setActiveTab('home'); setFilterType('all'); }}
-          className={`flex flex-col items-center justify-center w-full h-full ${activeTab === 'home' ? 'text-emerald-600' : 'text-slate-400'}`}>
+          className={`flex flex-col items-center justify-center w-full h-full ${activeTab === 'home' ? 'text-emerald-700' : 'text-slate-600'}`}>
           <IconHome />
           <span className="text-xs mt-1.5 font-medium">药箱</span>
         </button>
@@ -357,7 +357,7 @@ function App() {
          </div>
         <button 
           onClick={() => setActiveTab('cart')}
-          className={`flex flex-col items-center justify-center w-full h-full ${activeTab === 'cart' ? 'text-emerald-600' : 'text-slate-400'}`}>
+          className={`flex flex-col items-center justify-center w-full h-full ${activeTab === 'cart' ? 'text-emerald-700' : 'text-slate-600'}`}>
           <IconCart />
           <span className="text-xs mt-1.5 font-medium">补货</span>
         </button>
@@ -397,11 +397,11 @@ function App() {
               {selectedMed.brand && (
                 <div className="grid grid-cols-2 gap-4">
                    <div className="bg-slate-50 p-3 rounded-xl">
-                     <span className="text-xs text-slate-400 block mb-1">药品品牌</span>
+                     <span className="text-xs text-slate-600 block mb-1">药品品牌</span>
                      <span className="font-semibold text-slate-800">{selectedMed.brand}</span>
                    </div>
                    <div className="bg-slate-50 p-3 rounded-xl">
-                     <span className="text-xs text-slate-400 block mb-1">存放位置</span>
+                     <span className="text-xs text-slate-600 block mb-1">存放位置</span>
                      <span className="font-semibold text-slate-800">{selectedMed.location}</span>
                    </div>
                 </div>
@@ -409,12 +409,12 @@ function App() {
               {!selectedMed.brand && (
               <div className="grid grid-cols-2 gap-4">
                  <div className="bg-slate-50 p-3 rounded-xl">
-                   <span className="text-xs text-slate-400 block mb-1">存放位置</span>
+                   <span className="text-xs text-slate-600 block mb-1">存放位置</span>
                    <span className="font-semibold text-slate-800">{selectedMed.location}</span>
                  </div>
                  <div className="bg-slate-50 p-3 rounded-xl">
-                   <span className="text-xs text-slate-400 block mb-1">库存剩余</span>
-                   <span className="font-semibold text-emerald-600 text-lg">{selectedMed.total_quantity} {selectedMed.unit}</span>
+                   <span className="text-xs text-slate-600 block mb-1">库存剩余</span>
+                   <span className="font-semibold text-emerald-700 text-lg">{selectedMed.total_quantity} {selectedMed.unit}</span>
                  </div>
               </div>
               )}
@@ -449,19 +449,19 @@ function App() {
                         setEditingMed(med);
                         setShowAddForm(true);      // 打开预填的编辑表单
                       }}
-                      className="text-emerald-600 text-sm font-bold bg-emerald-50 px-4 py-2 rounded-lg hover:bg-emerald-100 transition-colors cursor-pointer border border-emerald-100"
+                      className="text-emerald-700 text-sm font-bold bg-emerald-50 px-4 py-2 rounded-lg hover:bg-emerald-100 transition-colors cursor-pointer border border-emerald-100"
                    >
                       编辑信息
                    </button>
                    <button 
                       type="button" 
                       onClick={(e) => onRequestDelete(e, selectedMed.id)}
-                      className="text-red-500 text-sm font-bold bg-red-50 px-4 py-2 rounded-lg hover:bg-red-100 transition-colors cursor-pointer border border-red-100"
+                      className="text-red-600 text-sm font-bold bg-red-50 px-4 py-2 rounded-lg hover:bg-red-100 transition-colors cursor-pointer border border-red-100"
                    >
                       删除此药
                    </button>
                  </div>
-                 <div className="text-right text-xs text-slate-400 space-y-1">
+                 <div className="text-right text-xs text-slate-600 space-y-1">
                    <div>过期: <span className="font-mono">{selectedMed.expiry_date}</span></div>
                    <div>购买: <span className="font-mono">{selectedMed.last_purchase_date}</span></div>
                  </div>
@@ -483,9 +483,9 @@ function App() {
             className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in-95 duration-200 outline-none" onClick={e => e.stopPropagation()}>
             <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center text-2xl mb-4 mx-auto">🗑️</div>
             <h3 className="text-xl font-bold text-center text-slate-800 mb-2">确认删除?</h3>
-            <p className="text-center text-slate-500 mb-8 px-4">
+            <p className="text-center text-slate-600 mb-8 px-4">
               您确定要将该药品从药箱中彻底移除吗？<br />
-              <span className="text-red-400 text-xs">此操作不可恢复。</span>
+              <span className="text-red-600 text-xs">此操作不可恢复。</span>
             </p>
             <div className="flex gap-4">
               <button type="button" onClick={() => setDeleteConfirmId(null)} className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50">取消</button>
@@ -506,12 +506,12 @@ function App() {
             aria-label="确认服用"
             className="bg-white rounded-3xl w-full max-w-sm p-8 shadow-2xl animate-in zoom-in-95 duration-200 outline-none" onClick={e => e.stopPropagation()}>
             <h3 className="text-xl font-bold text-center mb-2 text-slate-800">确认服用</h3>
-            <p className="text-center text-emerald-600 font-medium mb-8">{consumeTarget.name}</p>
+            <p className="text-center text-emerald-700 font-medium mb-8">{consumeTarget.name}</p>
             <div className="flex items-center justify-center gap-6 mb-10">
               <button onClick={() => setConsumeAmount(Math.max(1, consumeAmount - 1))} className="w-12 h-12 rounded-full bg-slate-100 text-2xl font-bold text-slate-600 flex items-center justify-center hover:bg-slate-200">-</button>
               <div className="flex flex-col items-center min-w-[60px]">
                  <span className="text-4xl font-bold text-slate-800">{consumeAmount}</span>
-                 <span className="text-sm text-slate-400 font-medium mt-1">{consumeTarget.unit}</span>
+                 <span className="text-sm text-slate-600 font-medium mt-1">{consumeTarget.unit}</span>
               </div>
               {/* 上限为当前库存，避免 UI 上可选出超过持有量的服用数 */}
               <button
@@ -557,7 +557,7 @@ function App() {
       )}
 
       {/* 免责说明：本工具只做家庭药品库存记录，不提供医疗建议 */}
-      <footer className="mt-10 pb-6 px-6 text-center text-[11px] leading-relaxed text-slate-400">
+      <footer className="mt-10 pb-6 px-6 text-center text-[11px] leading-relaxed text-slate-600">
         本工具仅用于家庭药品的库存与效期记录，<strong className="font-semibold">不构成任何医疗建议</strong>；用药请遵医嘱并阅读说明书。
       </footer>
     </div>

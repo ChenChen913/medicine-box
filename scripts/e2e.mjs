@@ -173,6 +173,32 @@ const clickInDialogMatch = (page, reSource) => page.evaluate(src => {
   if (!el) return 'NO_BTN';
   el.click(); return 'ok';
 }, reSource);
+/**
+ * 打开某药品的详情抽屉。
+ * 2026-09-10 起：移动卡片不再声明 role="button"（父级 role=button 套内层按钮 = 嵌套交互元素，
+ * 违反 WCAG 4.1.2，axe 的 nested-interactive 抓到 18 处），改为点卡片里真实可见的「详情」按钮。
+ * 桌面卡与移动卡都渲染了这个按钮，故两档视口通用。
+ */
+const openDetailByName = (page, name, extra = '') => page.evaluate((n, ex) => {
+  // ⚠️ 必须取「最具体的匹配容器」（祖先文本最短的那个）。
+  // 直接 find 会踩坑：外层容器包含所有卡片，于是每张卡的「详情」按钮都"匹配"，
+  // find 返回 DOM 里第一张卡 → 打开了别的药（实测：要布洛芬却开了阿司匹林）。
+  const cands = Array.from(document.querySelectorAll('button'))
+    .filter(b => (b.innerText || '').trim() === '详情')
+    .map(b => {
+      let el = b;
+      for (let i = 0; i < 8 && el; i++, el = el.parentElement) {
+        const t = el.innerText || '';
+        if (t.includes(n) && (!ex || t.includes(ex))) return { b, len: t.length };
+      }
+      return null;
+    })
+    .filter(Boolean)
+    .sort((x, y) => x.len - y.len);
+  if (cands.length) { cands[0].b.click(); return true; }
+  return false;
+}, name, extra);
+
 const activeInfo = page => page.evaluate(() => {
   const a = document.activeElement;
   const lab = a && a.labels && a.labels[0] ? a.labels[0].innerText.replace(/\n+/g, ' ') : '';
@@ -284,7 +310,7 @@ async function main() {
       record('G2.2', '入库后卡片立即出现在列表', cardShown);
 
       // 打卡
-      await p.evaluate(() => { const c = Array.from(document.querySelectorAll('[role=button]')).find(e => (e.innerText || '').includes('E2E测试药')); if (c) c.click(); });
+      await openDetailByName(p, 'E2E测试药');
       // 详情抽屉里的按钮是「打卡服药」（卡片上的才叫「吃药打卡」），这里限定在弹窗内匹配
       await p.waitForFunction(() => {
         const ds = Array.from(document.querySelectorAll('[role=dialog]'));
@@ -315,7 +341,7 @@ async function main() {
       await setInput(p, '搜索药品', ''); await sleep(500);
 
       // 编辑：改效期为过期 → 自动进补货
-      await p.evaluate(() => { const c = Array.from(document.querySelectorAll('[role=button]')).find(e => (e.innerText || '').includes('E2E测试药')); if (c) c.click(); });
+      await openDetailByName(p, 'E2E测试药');
       await waitLabel(p, '编辑药品', 15000);
       await clickLabel(p, '编辑药品');
       await waitLabel(p, '保存修改', 15000);
@@ -328,7 +354,7 @@ async function main() {
         JSON.stringify(it).slice(0, 160));
 
       // 删除
-      await p.evaluate(() => { const c = Array.from(document.querySelectorAll('[role=button]')).find(e => (e.innerText || '').includes('E2E测试药')); if (c) c.click(); });
+      await openDetailByName(p, 'E2E测试药');
       await waitLabel(p, '删除药品', 15000);
       await clickLabel(p, '删除药品'); await sleep(800);
       await clickLabel(p, '确认删除').catch(() => {});
@@ -443,7 +469,7 @@ async function main() {
       record('G4.4', '关闭弹窗后焦点归位到触发按钮', /入库新药/.test(back), '焦点=' + back);
 
       // 抽屉
-      await p.evaluate(() => { const c = Array.from(document.querySelectorAll('[role=button]')).find(e => (e.innerText || '').includes('布洛芬')); if (c) c.click(); });
+      await openDetailByName(p, '布洛芬');
       await sleep(1600);
       const f2 = await activeInfo(p);
       record('G4.5', '详情抽屉：焦点落在对话框容器（读屏先读标题）', f2.isPanel, JSON.stringify(f2));
@@ -560,7 +586,7 @@ async function main() {
       await c2.send('Network.enable');
       await c2.send('Network.setBlockedURLs', { urls: ['*DetailDrawer-*.js'] });
       await openApp(p2);
-      await p2.evaluate(() => { const c = Array.from(document.querySelectorAll('[role=button]')).find(e => (e.innerText || '').includes('布洛芬')); if (c) c.click(); });
+      await openDetailByName(p2, '布洛芬');
       await sleep(6000);
       const st = await p2.evaluate(() => ({
         len: document.body.innerText.trim().length,
@@ -672,7 +698,7 @@ async function main() {
         const seeded = await readDB(q);
         const reminders = (seeded.shoppingList || []).filter(s => s.medicine_name === '阿莫西林胶囊');
         // 删除珠海联邦
-        await q.evaluate(() => { const c = Array.from(document.querySelectorAll('[role=button]')).find(e => (e.innerText || '').includes('阿莫西林胶囊') && (e.innerText || '').includes('珠海联邦')); if (c) c.click(); });
+        await openDetailByName(q, '阿莫西林胶囊', '珠海联邦');
         await waitLabel(q, '删除药品', 15000);
         await clickLabel(q, '删除药品'); await sleep(900);
         await q.evaluate(() => { const x = Array.from(document.querySelectorAll('button')).find(y => /确认|删除/.test(y.innerText || '') && !/取消/.test(y.innerText || '')); if (x) x.click(); });
@@ -748,7 +774,9 @@ async function main() {
       }, DB_KEY);
       await p.reload({ waitUntil: 'domcontentloaded' }); await sleep(2500);
       const doseExplicit = await p.evaluate(async () => {
-        const card = Array.from(document.querySelectorAll('[role=button]')).find(e => (e.innerText || '').includes('每次两片药'));
+        const card = Array.from(document.querySelectorAll('button')).filter(b => (b.innerText || '').trim() === '详情')
+          .map(b => { let el = b; for (let i = 0; i < 8 && el; i++, el = el.parentElement) { const t = el.innerText || ''; if (t.includes('每次两片药')) return { b, len: t.length }; } return null; })
+          .filter(Boolean).sort((x, y) => x.len - y.len).map(x => x.b)[0];
         if (!card) return 'NO_CARD';
         card.click();
         await new Promise(r => setTimeout(r, 1200));
@@ -767,7 +795,9 @@ async function main() {
       await p.keyboard.press('Escape'); await sleep(600);
 
       const doseParsed = await p.evaluate(async () => {
-        const card = Array.from(document.querySelectorAll('[role=button]')).find(e => (e.innerText || '').includes('旧数据每次三粒'));
+        const card = Array.from(document.querySelectorAll('button')).filter(b => (b.innerText || '').trim() === '详情')
+          .map(b => { let el = b; for (let i = 0; i < 8 && el; i++, el = el.parentElement) { const t = el.innerText || ''; if (t.includes('旧数据每次三粒')) return { b, len: t.length }; } return null; })
+          .filter(Boolean).sort((x, y) => x.len - y.len).map(x => x.b)[0];
         if (!card) return 'NO_CARD';
         card.click();
         await new Promise(r => setTimeout(r, 1200));
@@ -957,6 +987,92 @@ async function main() {
         String(yearPicked).startsWith('20') && String(dayPicked).startsWith('20') && shown.includes('年'),
         '打开=' + opened + ' 年份按钮=' + yearJump + ' 选中=' + yearPicked + '-' + dayPicked + ' 触发按钮显示=' + shown);
       await p.close();
+    }
+
+    /* ============ G10 无障碍自动扫描（axe-core） ============ */
+    group('G10 无障碍自动扫描（axe-core）');
+    {
+      const AXE_PATH = path.join(ROOT, 'node_modules', 'axe-core', 'axe.min.js');
+      const axeSrc = fs.existsSync(AXE_PATH) ? fs.readFileSync(AXE_PATH, 'utf8') : '';
+      let n = 0;
+      const scan = async (page, label) => {
+        await page.addScriptTag({ content: axeSrc });
+        const out = await page.evaluate(async () => {
+          const r = await window.axe.run(document, {
+            runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
+          });
+          return r.violations.map(v => ({
+            id: v.id, impact: v.impact, n: v.nodes.length,
+            target: (((v.nodes[0] || {}).target) || []).join(' ').slice(0, 70),
+            why: (((v.nodes[0] || {}).failureSummary) || '').replace(/\s+/g, ' ').slice(0, 110),
+          }));
+        });
+        const bad = out.filter(v => v.impact === 'critical' || v.impact === 'serious');
+        const rest = out.filter(v => v.impact !== 'critical' && v.impact !== 'serious');
+        n += 1;
+        record('G10.' + n, label + '：axe（WCAG 2.0/2.1/2.2 A+AA）无 critical/serious 违规', bad.length === 0,
+          'critical/serious=' + bad.length + ' ' + JSON.stringify(bad.slice(0, 3)) + ' | 轻中度=' + rest.length);
+        return out;
+      };
+      if (!axeSrc) {
+        record('G10.0', 'axe-core 作为 devDependency 可用', false, '缺少 node_modules/axe-core/axe.min.js');
+      } else {
+        const p = await newPage(browser, 1440, 900);
+        await openApp(p);
+        await scan(p, 'modern 首页（1440）');
+        await clickContains(p, '需补货'); await sleep(1400);
+        await scan(p, 'modern 需补货（1440）');
+        await clickContains(p, '用药记录'); await sleep(1400);
+        await scan(p, 'modern 用药记录（1440）');
+        await realClick(p, '入库新药');
+        await p.waitForSelector('[role=dialog]', { timeout: 15000 }); await sleep(1000);
+        await scan(p, 'modern 新增药品表单（1440）');
+        await p.evaluate(() => { const b = Array.from(document.querySelectorAll('button')).find(x => (x.getAttribute('aria-label') || '') === '有效截止日期'); if (b) b.click(); });
+        await sleep(1000);
+        await scan(p, 'modern 日期弹层（1440）');
+        await p.keyboard.press('Escape'); await sleep(500);
+        await p.evaluate(() => { const x = document.querySelector('[role=dialog] button[aria-label="关闭"]'); if (x) x.click(); });
+        await sleep(700);
+        await openDetailByName(p, '布洛芬');
+        await sleep(1800);
+        await scan(p, 'modern 药品详情抽屉（1440）');
+        await p.keyboard.press('Escape'); await sleep(700);
+        await p.close();
+
+        const m = await newPage(browser, 390, 844, true);
+        await openApp(m);
+        await scan(m, 'modern 首页（390 移动端）');
+        await m.close();
+
+        const c = await newPage(browser, 1440, 900);
+        await c.goto(BASE + '?ui=classic', { waitUntil: 'domcontentloaded', timeout: 60000 });
+        await c.waitForFunction(() => document.getElementById('root') && document.getElementById('root').children.length > 0 && document.body.innerText.length > 60, { timeout: 30000 });
+        await sleep(1500);
+        await scan(c, 'classic 首页（1440）');
+        await c.close();
+
+        // 空药箱状态：新用户第一眼看到的界面。拦截演示数据文件，强制真正的空态。
+        const e1 = await newPage(browser, 390, 844, true);
+        await e1.setRequestInterception(true);
+        e1.on('request', r => (r.url().includes('demo-backup.json') ? r.abort() : r.continue()));
+        await e1.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        await e1.evaluate(() => localStorage.clear());
+        await e1.reload({ waitUntil: 'domcontentloaded' });
+        await sleep(2500);
+        await scan(e1, 'modern 空药箱（390 移动端）');
+        await e1.close();
+
+        const e2 = await newPage(browser, 1440, 900);
+        await e2.setRequestInterception(true);
+        e2.on('request', r => (r.url().includes('demo-backup.json') ? r.abort() : r.continue()));
+        await e2.goto(BASE + '?ui=classic', { waitUntil: 'domcontentloaded', timeout: 60000 });
+        await e2.evaluate(() => localStorage.clear());
+        await e2.reload({ waitUntil: 'domcontentloaded' });
+        await e2.waitForFunction(() => document.getElementById('root') && document.getElementById('root').children.length > 0, { timeout: 30000 });
+        await sleep(2000);
+        await scan(e2, 'classic 空药箱（1440）');
+        await e2.close();
+      }
     }
 
   } finally {

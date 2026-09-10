@@ -32,7 +32,8 @@ jobs:
       - name: 类型检查（tsc --noEmit）
         run: npm run typecheck
 
-      - name: 服务层测试（170 断言：损坏保护 / 输入防御 / 时区 / 属性测试）
+      # npm test 实际包含两套：服务层 170 断言 + UI 逻辑 91 断言（损坏保护 / 输入防御 / 时区 / 属性测试）
+      - name: 单元与逻辑测试（261 断言）
         run: npm test
 
       - name: 代码规范（eslint）

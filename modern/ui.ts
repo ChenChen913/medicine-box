@@ -87,7 +87,7 @@ export function getStatus(m: Medicine, today: string = todayDateString()): MedSt
     return {
       key: 'low',
       label: remain !== null && remain <= 3 ? `库存告急 (仅剩${remain}天)` : '库存告急',
-      badgeClass: 'bg-m3-tertiary-fixed text-m3-tertiary-container',
+      badgeClass: 'bg-m3-tertiary-fixed text-m3-on-tertiary-fixed-variant',
       emphasisClass: 'text-m3-tertiary',
     };
   }
@@ -98,7 +98,7 @@ export function getStatus(m: Medicine, today: string = todayDateString()): MedSt
       return {
         key: 'expiring',
         label: `还有 ${left} 天过期`,
-        badgeClass: 'bg-m3-tertiary-fixed text-m3-tertiary-container',
+        badgeClass: 'bg-m3-tertiary-fixed text-m3-on-tertiary-fixed-variant',
         emphasisClass: 'text-m3-on-surface',
       };
     }

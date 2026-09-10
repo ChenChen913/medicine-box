@@ -55,7 +55,9 @@ export default {
           'surface-container-highest': '#d8e3fb',
           'surface-bright': '#f9f9ff',
           'surface-dim': '#cfdaf2',
-          outline: '#6e7977',
+          // 无障碍修正：原 #6e7977 作正文/占位文字时对 #f0f3ff 仅 4.06:1（<4.5 未达标），
+          // 加深到 5.00:1；该 token 不用于边框（边框一律用 outline-variant），故无副作用。
+          outline: '#5f6b69',
           'outline-variant': '#bdc9c6',
           'inverse-surface': '#263143',
           'inverse-on-surface': '#ecf1ff',

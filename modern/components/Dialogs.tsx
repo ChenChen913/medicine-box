@@ -178,7 +178,7 @@ const UNITS = ['粒', '片', '盒', '袋', '瓶', '支', 'ml', '包', '克'];
 const FORM_TYPE_META: Record<string, { icon: IconName; wrap: string }> = {
   '片剂': { icon: 'blister', wrap: 'bg-m3-primary/10 text-m3-primary' },
   '胶囊': { icon: 'capsule', wrap: 'bg-m3-secondary-fixed/40 text-m3-secondary' },
-  '颗粒': { icon: 'sachet', wrap: 'bg-m3-tertiary-fixed text-m3-tertiary-container' },
+  '颗粒': { icon: 'sachet', wrap: 'bg-m3-tertiary-fixed text-m3-on-tertiary-fixed-variant' },
   '口服液': { icon: 'syrup', wrap: 'bg-m3-primary-fixed/40 text-m3-primary' },
   '外用': { icon: 'healing', wrap: 'bg-m3-error-container text-m3-error' },
   '喷雾': { icon: 'spraying', wrap: 'bg-m3-surface-container-high text-m3-primary' },
@@ -429,7 +429,7 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, allMedicines, pendi
         )}
         {sameFormDiffBrand && (
           <div className="rounded-xl p-3 bg-m3-tertiary-fixed/60 text-m3-on-surface text-[12px] leading-relaxed flex items-start gap-2" role="status">
-            <Icon name="info" className="w-4 h-4 text-m3-tertiary-container shrink-0 mt-0.5" />
+            <Icon name="info" className="w-4 h-4 text-m3-on-tertiary-fixed-variant shrink-0 mt-0.5" />
             <span>
               药箱中已有「{existingMatch.name}」{normBrand(existingMatch.brand) ? `（${normBrand(existingMatch.brand)}）` : ''}。本次填写的品牌不同，将作为<b className="font-semibold">独立条目</b>录入，两种品牌的用药记录会<b className="font-semibold">分开统计</b>；若想给已有品牌补货，建议在详情中直接编辑该药品增加库存。
             </span>
@@ -437,7 +437,7 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, allMedicines, pendi
         )}
         {existingMatch && !sameIdentity && !sameFormDiffBrand && (
           <div className="rounded-xl p-3 bg-m3-tertiary-fixed/60 text-m3-on-surface text-[12px] leading-relaxed flex items-start gap-2" role="status">
-            <Icon name="info" className="w-4 h-4 text-m3-tertiary-container shrink-0 mt-0.5" />
+            <Icon name="info" className="w-4 h-4 text-m3-on-tertiary-fixed-variant shrink-0 mt-0.5" />
             <span>
               药箱中已有同名药品「{existingMatch.name}」，但剂型不同（已有：{existingMatch.form_type}），将作为<b className="font-semibold">独立新条目</b>录入；若想为它补货，建议在详情中直接编辑该药品增加库存。
             </span>

@@ -84,12 +84,12 @@ const MedicineCard: React.FC<Props> = ({ medicine, onConsume, onDetail }) => {
   if (isExpired) {
     // 过期样式：浅红背景
     cardStyleClass = "bg-red-50 border-red-200 shadow-none";
-    iconBg = "bg-red-100 border-red-200 text-red-400";
+    iconBg = "bg-red-100 border-red-200 text-red-600";
   } else if (isOut) {
     // 用尽样式：浅灰背景，透明度降低
     cardStyleClass = "bg-slate-100 border-slate-200 shadow-none";
     contentOpacity = "opacity-60 grayscale";
-    iconBg = "bg-slate-200 border-slate-300 text-slate-400";
+    iconBg = "bg-slate-200 border-slate-300 text-slate-600";
   }
 
   return (
@@ -125,7 +125,7 @@ const MedicineCard: React.FC<Props> = ({ medicine, onConsume, onDetail }) => {
             <div className="flex justify-between items-start">
               <h3 className="font-bold text-slate-800 text-xl leading-tight line-clamp-2 mb-1.5">{medicine.name}</h3>
             </div>
-            <p className="text-sm text-slate-500 font-medium mb-2">{medicine.form_type}{medicine.brand ? ` · ${medicine.brand}` : ''} · {medicine.location}</p>
+            <p className="text-sm text-slate-600 font-medium mb-2">{medicine.form_type}{medicine.brand ? ` · ${medicine.brand}` : ''} · {medicine.location}</p>
             
             <div className="text-xs text-slate-600 bg-white/50 p-2 rounded-lg line-clamp-2 leading-relaxed border border-slate-100/50">
               <span className="font-bold text-slate-700">主治: </span>{medicine.symptoms_treated}
@@ -134,16 +134,16 @@ const MedicineCard: React.FC<Props> = ({ medicine, onConsume, onDetail }) => {
           
           <div className="mt-4 flex items-end justify-between">
              <div className="flex flex-col">
-                <div className="text-sm text-slate-400 mb-0.5">剩余库存</div>
+                <div className="text-sm text-slate-600 mb-0.5">剩余库存</div>
                 <div className="flex items-baseline gap-1">
-                  <span className={`font-bold text-2xl ${isLowStock || isOut ? 'text-red-500' : 'text-emerald-600'}`}>
+                  <span className={`font-bold text-2xl ${isLowStock || isOut ? 'text-red-600' : 'text-emerald-700'}`}>
                     {medicine.total_quantity}
                   </span>
-                  <span className="text-slate-500 text-sm font-medium">{medicine.unit}</span>
+                  <span className="text-slate-600 text-sm font-medium">{medicine.unit}</span>
                 </div>
                 {/* 还能吃几天提示 */}
                 {supplyDuration && !isExpired && !isOut && (
-                  <span className="text-xs text-blue-500 font-medium mt-1 bg-blue-50 px-2 py-0.5 rounded-md w-fit">
+                  <span className="text-xs text-blue-700 font-medium mt-1 bg-blue-50 px-2 py-0.5 rounded-md w-fit">
                     {supplyDuration}
                   </span>
                 )}
@@ -158,8 +158,8 @@ const MedicineCard: React.FC<Props> = ({ medicine, onConsume, onDetail }) => {
                disabled={isOut || isExpired}
                className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm ${
                  isOut || isExpired
-                   ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
-                   : 'bg-emerald-50 text-emerald-600 active:bg-emerald-100 hover:bg-emerald-100 border border-emerald-200 hover:shadow-md active:scale-95'
+                   ? 'bg-slate-200 text-slate-600 cursor-not-allowed' 
+                   : 'bg-emerald-50 text-emerald-700 active:bg-emerald-100 hover:bg-emerald-100 border border-emerald-200 hover:shadow-md active:scale-95'
                }`}
              >
                {consumeLabel}
@@ -169,7 +169,7 @@ const MedicineCard: React.FC<Props> = ({ medicine, onConsume, onDetail }) => {
       </div>
       
       {/* 底部详情条 */}
-      <div className={`px-4 py-2.5 border-t border-slate-100 text-sm text-slate-500 truncate flex items-center gap-2 ${isExpired || isOut ? 'bg-transparent' : 'bg-slate-50'}`}>
+      <div className={`px-4 py-2.5 border-t border-slate-100 text-sm text-slate-600 truncate flex items-center gap-2 ${isExpired || isOut ? 'bg-transparent' : 'bg-slate-50'}`}>
         <span className={`w-1.5 h-1.5 rounded-full ${getStatusDotColor()}`}></span>
         用法: {medicine.dosage_instruction}
       </div>

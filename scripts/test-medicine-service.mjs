@@ -1468,6 +1468,45 @@ async function main() {
     return '同名两条各自持有提醒，核销不再互相误伤';
   });
 
+  // J6：核销定位的回退路径（变异测试 M5 暴露的覆盖缺口 —— 老数据/失效 id 走的就是这里）
+  await run('J6', '核销定位回退：medicine_id 失效或缺席时按品牌命中，绝不取同名首条', async () => {
+    const F = mod.findMedicineForItem;
+    const meds = [
+      makeMed({ id: 'J6-a', name: NAME_J, brand: '芬必得', total_quantity: 3, expiry_date: '2099-01-01' }),
+      makeMed({ id: 'J6-b', name: NAME_J, brand: '中美史克', total_quantity: 0, expiry_date: shiftToday(-1) }),
+    ];
+    const base = { reason: '用尽', status: 'pending', created_at: new Date().toISOString() };
+
+    // ① 条目 medicine_id 指向已被删除的药品 → 必须回退到品牌匹配（而不是取同名首条）
+    const stale = Object.assign({ id: 'J6-i1', medicine_name: NAME_J, brand: '中美史克', medicine_id: 'deleted-id' }, base);
+    const i1 = F(meds, stale);
+    check(i1 !== -1 && meds[i1].id === 'J6-b', {
+      expected: 'medicine_id 失效 → 命中 中美史克（J6-b）',
+      actual: 'index=' + i1 + ' 命中=' + (i1 === -1 ? '无' : meds[i1].id + '/' + meds[i1].brand),
+      evidence: 'services/medicineService.ts:129-137 byId 未命中后必须按 name+brand 精确定位',
+    });
+
+    // ② 老数据条目完全没有 medicine_id（升级前遗留） → 同样必须按品牌
+    const legacy = { id: 'J6-i2', medicine_name: NAME_J, brand: '中美史克' };
+    Object.assign(legacy, base);
+    const i2 = F(meds, legacy);
+    check(i2 !== -1 && meds[i2].id === 'J6-b', {
+      expected: '无 medicine_id 但有品牌 → 命中 中美史克（J6-b）',
+      actual: 'index=' + i2 + ' 命中=' + (i2 === -1 ? '无' : meds[i2].id + '/' + meds[i2].brand),
+      evidence: 'services/medicineService.ts:134-137 品牌分支（老数据兼容路径）',
+    });
+
+    // ③ 药名与品牌都无法区分时，兜底必须选「最需要补货」的那条（库存最少）
+    const unknown = Object.assign({ id: 'J6-i3', medicine_name: NAME_J }, base);
+    const i3 = F(meds, unknown);
+    check(i3 !== -1 && meds[i3].id === 'J6-b', {
+      expected: '无 id 无品牌 → 兜底选库存更少的 J6-b（0 < 3）',
+      actual: 'index=' + i3 + ' 命中=' + (i3 === -1 ? '无' : meds[i3].id + ' 库存=' + meds[i3].total_quantity),
+      evidence: 'services/medicineService.ts:138-147 candidates 按库存升序、效期升序兜底',
+    });
+    return '三条回退路径全部命中正确记录';
+  });
+
   // ----------------------------------------------------------
   line('');
   line('--- NB. 同名不同品牌完整矩阵（阿莫西林：华北制药 24 未过期 / 珠海联邦 16 已过期）---');

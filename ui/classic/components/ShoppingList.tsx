@@ -11,9 +11,9 @@ const ShoppingList: React.FC = () => {
   // 原因标签配色（避免嵌套三元，用映射表维护）
   const reasonTagStyle: Record<string, string> = {
     '过期': 'bg-red-50 text-red-600 border-red-100',
-    '用尽': 'bg-orange-50 text-orange-600 border-orange-100',
+    '用尽': 'bg-orange-50 text-orange-700 border-orange-100',
   };
-  const getReasonTagStyle = (reason: string) => reasonTagStyle[reason] ?? 'bg-blue-50 text-blue-600 border-blue-100';
+  const getReasonTagStyle = (reason: string) => reasonTagStyle[reason] ?? 'bg-blue-50 text-blue-700 border-blue-100';
 
   const loadList = async () => {
     try {
@@ -63,8 +63,8 @@ const ShoppingList: React.FC = () => {
       {items.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl shadow-sm border border-dashed border-slate-200">
           <div className="text-4xl mb-4">🛒</div>
-          <p className="text-slate-400 font-medium">目前没有需要补货的药品</p>
-          <p className="text-slate-300 text-sm mt-1">系统会自动检测库存和过期情况</p>
+          <p className="text-slate-600 font-medium">目前没有需要补货的药品</p>
+          <p className="text-slate-600 text-sm mt-1">系统会自动检测库存和过期情况</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -76,7 +76,7 @@ const ShoppingList: React.FC = () => {
                   <span className={`text-xs font-bold px-2 py-1 rounded border ${getReasonTagStyle(item.reason)}`}>
                     原因: {item.reason}
                   </span>
-                  <span className="text-xs text-slate-400">加入时间: {new Date(item.created_at).toLocaleDateString()}</span>
+                  <span className="text-xs text-slate-600">加入时间: {new Date(item.created_at).toLocaleDateString()}</span>
                 </div>
               </div>
               
@@ -95,7 +95,7 @@ const ShoppingList: React.FC = () => {
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
             <h3 className="text-xl font-bold text-slate-800 mb-1">购入登记</h3>
-            <p className="text-slate-500 text-sm mb-6">药品: <span className="font-medium text-emerald-600">{restockItem.medicine_name}</span></p>
+            <p className="text-slate-600 text-sm mb-6">药品: <span className="font-medium text-emerald-700">{restockItem.medicine_name}</span></p>
             
             <div className="space-y-4">
                <div>
