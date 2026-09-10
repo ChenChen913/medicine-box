@@ -240,6 +240,36 @@ export function isSameMedicineIdentity(
  */
 const PROD_RESET_FLAG = 'smart-medicine-box:prod-reset:v1';
 
+/**
+ * 演示数据清理迁移（一次性，幂等）。
+ *
+ * 背景：2026-09-10 之前，应用会在"空药箱"时自动把演示数据写进浏览器。该自动载入已撤除，
+ * 但**已经写进设备的演示数据不会自己消失**——而且当初导入时顺手写下了上面那个投产标记，
+ * 使老的清空迁移不会再次触发。于是老设备会一直看到演示数据。
+ *
+ * 安全性：只按**指纹**识别（药品 id 集合与演示数据完全一致），指纹不符说明是用户自己的真实数据，
+ * 一个字都不动。标记只写一次，跑过就不再检查。
+ */
+const DEMO_CLEANUP_FLAG = 'smart-medicine-box:demo-cleanup:v1';
+/** 演示数据的药品 id 集合（默认字典序排序后拼接），取自 backup/medicine-box-demo-backup-20260909.json */
+const LEGACY_DEMO_IDS = '1,10,11,12,13,14,15,16,17,18,19,2,20,3,4,5,6,7,8,9,seed-amox-b';
+
+function cleanupSeededDemoData(data: DBStructure): boolean {
+  try {
+    if (localStorage.getItem(DEMO_CLEANUP_FLAG)) return false;
+    localStorage.setItem(DEMO_CLEANUP_FLAG, new Date().toISOString());
+  } catch {
+    return false; // 存储不可用：交给上层的读失败通道，不在这里硬来
+  }
+  const sig = data.medicines.map(m => String(m.id)).sort().join(',');
+  if (sig !== LEGACY_DEMO_IDS) return false; // 不是演示数据 → 绝不改动
+  data.medicines = [];
+  data.shoppingList = [];
+  data.logs = [];
+  console.info('[演示数据清理] 浏览器里遗留的演示数据已清空，药箱从空开始（你自己的数据不受影响）');
+  return true;
+}
+
 function resetForProduction(data: DBStructure): boolean {
   try {
     if (localStorage.getItem(PROD_RESET_FLAG)) return false;
@@ -587,6 +617,8 @@ export const MedicineService = {
 
     // 投产重置（一次性）：正式投入使用前清空演示/历史数据（见函数注释与 backup/README.md）
     if (resetForProduction(data)) dirty = true;
+    // 清掉老设备里遗留的演示数据（按指纹识别；真实数据不受影响）
+    if (cleanupSeededDemoData(data)) dirty = true;
 
     // 过期检测每次加载都执行（此前只在首次播种时运行，
     // 导致药品后来过期时永远不会自动进入补货清单）。

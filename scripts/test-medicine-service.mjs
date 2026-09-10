@@ -1468,6 +1468,28 @@ async function main() {
     return '同名两条各自持有提醒，核销不再互相误伤';
   });
 
+  // J7：演示数据清理迁移（老设备里遗留的演示数据）
+  await run('J7', '遗留演示数据按指纹清空一次，真实数据不受影响', async () => {
+    const demo = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'backup', 'medicine-box-demo-backup-20260909.json'), 'utf8')).data;
+    seedDB(demo, 'migrated');
+    const after = await S.getMedicines();
+    check(after.length === 0, {
+      expected: '识别出演示数据指纹 → 清空（0 种）',
+      actual: '剩余 ' + after.length + ' 种',
+      evidence: 'services/medicineService.ts cleanupSeededDemoData：按药品 id 集合指纹识别',
+    });
+
+    // 真实数据（id 集合不同）绝不能被误清
+    seedDB({ medicines: [makeMed({ id: 'my-med-1', name: '我自己的药', total_quantity: 12 })], shoppingList: [], logs: [] }, 'migrated');
+    const mine = await S.getMedicines();
+    check(mine.length === 1 && mine[0].name === '我自己的药' && mine[0].total_quantity === 12, {
+      expected: '指纹不符 → 原样保留 1 种 / 12 件',
+      actual: '剩余 ' + mine.length + ' 种' + (mine[0] ? ' / ' + mine[0].total_quantity + ' 件' : ''),
+      evidence: 'cleanupSeededDemoData：签名不相等时直接返回 false',
+    });
+    return '演示数据清空、真实数据零改动';
+  });
+
   // J6：核销定位的回退路径（变异测试 M5 暴露的覆盖缺口 —— 老数据/失效 id 走的就是这里）
   await run('J6', '核销定位回退：medicine_id 失效或缺席时按品牌命中，绝不取同名首条', async () => {
     const F = mod.findMedicineForItem;

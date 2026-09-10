@@ -217,25 +217,30 @@ const FIXTURE = JSON.parse(
   fs.readFileSync(path.join(ROOT, 'backup', 'medicine-box-demo-backup-20260909.json'), 'utf8')
 ).data;
 const PROD_RESET_FLAG = 'smart-medicine-box:prod-reset:v1';
+// 应用会按指纹清掉"老设备遗留的演示数据"。测试是主动注入夹具，必须同时写上清理标记，
+// 否则夹具会被当成遗留数据清空（本迁移上线时就把 G2/G4/G6/G7 打红过，是真拦住了）。
+const DEMO_CLEANUP_FLAG = 'smart-medicine-box:demo-cleanup:v1';
+const SEED_FLAGS = [PROD_RESET_FLAG, DEMO_CLEANUP_FLAG];
 
 /**
  * 打开应用。默认先把夹具写进 localStorage（多数用例需要药箱里有药）；
  * 传 { seed: false } 保持空药箱，用于空态与"从零开始"的用例。
  */
 /** 把夹具重新写回当前页面（用于那些故意清空数据之后的用例） */
-const reseed = page => page.evaluate((k, db, flag) => {
+const reseed = page => page.evaluate((k, db, flags) => {
   localStorage.setItem(k, JSON.stringify(db));
-  localStorage.setItem(flag, new Date().toISOString());
-}, DB_KEY, FIXTURE, PROD_RESET_FLAG);
+  flags.forEach(x => localStorage.setItem(x, new Date().toISOString()));
+}, DB_KEY, FIXTURE, SEED_FLAGS);
 
 async function openApp(page, { seed = true } = {}) {
   await page.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 60000 });
   if (seed) {
-    await page.evaluate((k, db, flag) => {
+    await page.evaluate((k, db, flags) => {
       localStorage.setItem(k, JSON.stringify(db));
-      // 必须同时写"投产清空"标记：否则首次读取会按遗留数据迁移逻辑把它清掉
-      localStorage.setItem(flag, new Date().toISOString());
-    }, DB_KEY, FIXTURE, PROD_RESET_FLAG);
+      // 两个标记都要写：投产清空标记 + 演示数据清理标记，
+      // 否则首次读取时会被对应的迁移逻辑清掉（两次都真实发生过）
+      flags.forEach(x => localStorage.setItem(x, new Date().toISOString()));
+    }, DB_KEY, FIXTURE, SEED_FLAGS);
     await page.reload({ waitUntil: 'domcontentloaded' });
   }
   await page.waitForFunction(() => document.body.innerText.includes('我的药箱'), { timeout: 30000 });
