@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = path.resolve(path.dirname(__filename), '..');
@@ -223,20 +223,30 @@ function seedDB(db, device) { storage.seed(db || emptyDB(), device || 'migrated'
 // ==========================================================
 // 打包（esbuild，随 vite 安装，不新增依赖）
 // ==========================================================
-function buildBundle() {
+async function buildBundle() {
   const out = path.join(os.tmpdir(), 'mb-svc-bundle-' + process.pid + '.mjs');
-  const esbuildJs = path.join(PROJECT_ROOT, 'node_modules', 'esbuild', 'bin', 'esbuild');
-  const args = [
-    esbuildJs, SRC_FILE,
-    '--bundle', '--format=esm', '--platform=node',
-    '--define:import.meta.env.VITE_SUPABASE_URL=""',
-    '--define:import.meta.env.VITE_SUPABASE_ANON_KEY=""',
-    '--external:@supabase/supabase-js',
-    '--log-level=warning',
-    '--outfile=' + out,
-  ];
-  if (!fs.existsSync(esbuildJs)) throw new Error('找不到 esbuild: ' + esbuildJs);
-  execFileSync(process.execPath, args, { cwd: PROJECT_ROOT, encoding: 'utf8', stdio: 'pipe' });
+  // 用 esbuild 的 JS API 而不是调用 bin/esbuild：
+  // Windows 上 bin/esbuild 是 JS 启动壳，Linux/macOS 上却是原生二进制，
+  // 用 node 去执行它在 CI（ubuntu）会直接 SyntaxError。
+  let esbuild;
+  try {
+    esbuild = await import('esbuild');
+  } catch (e) {
+    throw new Error('找不到 esbuild：它是 devDependency，请先运行 npm install（' + (e && e.message) + '）');
+  }
+  await esbuild.build({
+    entryPoints: [SRC_FILE],
+    outfile: out,
+    bundle: true,
+    format: 'esm',
+    platform: 'node',
+    define: {
+      'import.meta.env.VITE_SUPABASE_URL': '""',
+      'import.meta.env.VITE_SUPABASE_ANON_KEY': '""',
+    },
+    external: ['@supabase/supabase-js'],
+    logLevel: 'warning',
+  });
   return out;
 }
 
@@ -322,7 +332,7 @@ async function main() {
   line('node ' + process.version + ' | ' + process.platform + ' | 本机时区 ' + Intl.DateTimeFormat().resolvedOptions().timeZone + ' | 今天 ' + todayLocal());
   line('='.repeat(78));
 
-  const bundlePath = buildBundle();
+  const bundlePath = await buildBundle();
   const bundleSrc = fs.readFileSync(bundlePath, 'utf8');
   globalThis.localStorage = storage.ls; // 必须在 import 之前挂好
 
