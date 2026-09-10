@@ -41,7 +41,9 @@ export function usableDays(m: Medicine): number | null {
 export function getStatus(m: Medicine, today: string = todayDateString()): MedStatus {
   // 过期优先级最高：无论库存多少，过期药品都不能再标注为「正常」
   if (m.expiry_date && m.expiry_date < today) {
-    const over = Math.max(1, -daysBetween(m.expiry_date, today));
+    // daysBetween(过期日, 今天) 已经是"过了多少天"的正数；
+    // 旧代码多取了一次负号 → 任何过期药品都显示「已过期 1 天」（老 bug，2026-09-10 修）
+    const over = Math.max(1, daysBetween(m.expiry_date, today));
     return {
       key: 'expired',
       label: `已过期 ${over} 天`,

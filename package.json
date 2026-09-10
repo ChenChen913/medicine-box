@@ -11,7 +11,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "node scripts/test-medicine-service.mjs",
+    "test": "node scripts/test-medicine-service.mjs && node scripts/test-ui-logic.mjs",
+    "test:service": "node scripts/test-medicine-service.mjs",
+    "test:ui": "node scripts/test-ui-logic.mjs",
     "lint": "eslint ."
   },
   "dependencies": {
