@@ -827,6 +827,36 @@ async function main() {
         const btn = d && Array.from(d.querySelectorAll('button')).find(b => (b.getAttribute('aria-label') || '') === '有效截止日期');
         return btn ? (btn.innerText || '').trim() : 'NO_TRIGGER';
       });
+      // G9.8 日期面板不得撑出横向滚动（手机右列字段尤甚，老板反馈过"要往左滑"）
+      for (const [vw, vh] of [[390, 844], [360, 640], [768, 1024], [1440, 900]]) {
+        const vp = await newPage(browser, vw, vh, vw < 500);
+        await openApp(vp);
+        const geo = await vp.evaluate(async () => {
+          const add = Array.from(document.querySelectorAll('button,[role=button]'))
+            .find(x => (((x.innerText || '') + ' ' + (x.getAttribute('aria-label') || '')).trim()) === '入库新药');
+          if (!add) return { err: 'NO_ADD_BTN' };
+          add.click();
+          await new Promise(r => setTimeout(r, 1300));
+          const ds = Array.from(document.querySelectorAll('[role=dialog]'));
+          const modal = ds[ds.length - 1];
+          const trg = modal && Array.from(modal.querySelectorAll('button')).find(x => (x.getAttribute('aria-label') || '') === '有效截止日期');
+          if (!trg) return { err: 'NO_TRIGGER' };
+          trg.click();
+          await new Promise(r => setTimeout(r, 600));
+          const panel = document.querySelector('[aria-label="有效截止日期选择器"]');
+          const pr = panel ? panel.getBoundingClientRect() : null;
+          return {
+            win: window.innerWidth,
+            docScroll: document.documentElement.scrollWidth,
+            modalScroll: modal.scrollWidth, modalClient: modal.clientWidth,
+            pLeft: pr ? Math.round(pr.left) : -1, pRight: pr ? Math.round(pr.right) : -1,
+          };
+        });
+        const ok = !geo.err && geo.docScroll <= geo.win + 1 && geo.modalScroll <= geo.modalClient + 1 && geo.pLeft >= 0 && geo.pRight <= geo.win;
+        record('G9.8-' + vw, vw + 'x' + vh + ' 日期面板夹紧在弹窗内（无横向滚动）', ok, JSON.stringify(geo));
+        await vp.close();
+      }
+
       record('G9.7', '新日期选择器：可一键跳到年份网格并选中年份/日期',
         String(yearPicked).startsWith('20') && String(dayPicked).startsWith('20') && shown.includes('年'),
         '打开=' + opened + ' 年份按钮=' + yearJump + ' 选中=' + yearPicked + '-' + dayPicked + ' 触发按钮显示=' + shown);

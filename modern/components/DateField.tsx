@@ -47,6 +47,9 @@ export const DateField: React.FC<Props> = ({ value, onChange, ariaLabel, classNa
     const base = parsed ? parsed[0] : today.y;
     return Math.floor((base - 1) / 12) * 12 + 1;
   });
+  // 面板定位：必须夹紧在"最近的弹窗容器"内，否则会撑出横向滚动条
+  // （手机上字段在右列时尤其明显 —— 老板反馈"要往左滑才能看全"）
+  const [pos, setPos] = useState({ left: 0, width: 300, up: false, maxH: 420 });
 
   // 打开时把视图定位到已选值（或今天）
   useEffect(() => {
@@ -57,6 +60,38 @@ export const DateField: React.FC<Props> = ({ value, onChange, ariaLabel, classNa
     setShowYears(false);
     setShowMonths(false);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 计算面板位置：水平夹紧在弹窗内、垂直空间不足时向上弹
+  useEffect(() => {
+    if (!open) return;
+    const compute = (): void => {
+      const box = boxRef.current;
+      if (!box) return;
+      const rect = box.getBoundingClientRect();
+      const modal = box.closest('[role="dialog"]') as HTMLElement | null;
+      const b = modal
+        ? modal.getBoundingClientRect()
+        : { left: 0, right: window.innerWidth, top: 0, bottom: window.innerHeight, width: window.innerWidth, height: window.innerHeight };
+      const pad = 12;
+      const width = Math.max(228, Math.min(300, b.width - pad * 2, window.innerWidth - pad * 2));
+      let left = 0;
+      if (rect.left + width > b.right - pad) left = (b.right - pad - width) - rect.left;
+      if (rect.left + left < b.left + pad) left = (b.left + pad) - rect.left;
+      if (rect.left + left < 8) left = 8 - rect.left;
+      if (rect.left + left + width > window.innerWidth - 8) left = window.innerWidth - 8 - width - rect.left;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const up = spaceBelow < 400;
+      const maxH = Math.max(220, Math.round((up ? rect.top : spaceBelow) - pad * 2));
+      setPos({ left, width, up, maxH });
+    };
+    compute();
+    window.addEventListener('resize', compute);
+    window.addEventListener('orientationchange', compute);
+    return () => {
+      window.removeEventListener('resize', compute);
+      window.removeEventListener('orientationchange', compute);
+    };
+  }, [open]);
 
   // 点外部 / Esc 关闭
   useEffect(() => {
@@ -116,7 +151,13 @@ export const DateField: React.FC<Props> = ({ value, onChange, ariaLabel, classNa
         <div
           role="dialog"
           aria-label={ariaLabel + '选择器'}
-          className="absolute left-0 top-[calc(100%+6px)] z-[80] w-[300px] max-w-[86vw] rounded-2xl bg-m3-surface-container-lowest shadow-2xl border border-m3-surface-container-low p-3"
+          style={{
+            left: pos.left,
+            width: pos.width,
+            maxHeight: pos.maxH,
+            ...(pos.up ? { bottom: 'calc(100% + 6px)', top: 'auto' } : { top: 'calc(100% + 6px)' }),
+          }}
+          className="absolute z-[80] overflow-y-auto overscroll-contain rounded-2xl bg-m3-surface-container-lowest shadow-2xl border border-m3-surface-container-low p-3"
         >
           {/* 顶部导航：‹ 年 月 › */}
           <div className="flex items-center justify-between gap-1 mb-2">

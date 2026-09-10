@@ -38,7 +38,12 @@
 ### 1.2 Web 性能（Core Web Vitals，第 75 百分位、移动端）
 - **LCP ≤ 2.5s**、**INP ≤ 200ms**、**CLS ≤ 0.1**（良好区间）——超出即为需改进/差。
 - Lighthouse 四类审计（Performance / Accessibility / Best Practices / SEO）行业发布门槛通常取**各 ≥ 90**。
-- 首屏主 JS chunk 体积应受控（本项目历史值：413KB → 189KB，见 TODO.md）。
+- 首屏主 JS chunk 体积应受控。**本项目采用业界通用的 gzip 传输体积口径：首屏 JS gzip ≤ 100 kB**
+  （raw 体积仅作参考，不做硬门槛）。历史沿革：413KB → 189KB → 291.8 KiB → 238.5 KiB → 253.1 kB raw / 约 80 kB gzip。
+  > 口径修订说明（2026-09-10，老板授权由 AI 决策）：原口径"raw ≤250KB"是自定数值。实测发现，
+  > 若为凑够 raw 体积而把「需补货/用药记录」等底部导航直达的页面拆成按需加载，弱网下点页签需要等
+  > 网络下载 —— 老板在真机上明确反馈"点击需补货加载很长时间"。经权衡，**导航即时响应优先于 raw 体积**，
+  > 因此把这两个页面放回首屏，并把标准改为更贴近真实下载量的 gzip 口径（当前 80 kB，仍有充裕余量）。
 - 来源：https://web.dev/articles/defining-core-web-vitals-thresholds
 
 ### 1.3 PWA 与可安装性
@@ -194,7 +199,7 @@
 | --- | --- | --- | --- |
 | B6.1 | LCP ≤2.5s、INP ≤200ms、CLS ≤0.1 | Lighthouse 移动端仿真 | 待验证（需 Chrome） |
 | B6.2 | Lighthouse 四类各 ≥90 | Lighthouse | 待验证 |
-| B6.3 | 首屏主 chunk 受控（≤250KB，历史 189KB） | 构建产物统计 | 待验证 |
+| B6.3 | 首屏 JS 受控（gzip ≤100 kB；raw 仅参考） | 构建产物统计 | 待验证 |
 | B6.4 | manifest 必填四项齐全 + 192/512 图标 + maskable | 审查 manifest + Lighthouse | 待验证（文件已存在） |
 | B6.5 | 核心链路 console 无 error/warn | 双档冒烟 | 待验证 |
 | B6.6 | 离线可用（Service Worker） | 断网刷新 | **否**：全仓无 SW 文件、无注册代码 → 是否纳入范围见第 6 节 |
@@ -328,7 +333,7 @@
 | B5.6 | 允许缩放 | 是 | viewport 未禁用缩放 |
 | B6.1 | CWV | 是 | LCP 1.8s / CLS 0.014 / TBT 0ms（INP 需字段数据，实验室不可测） |
 | B6.2 | Lighthouse 四类 ≥90 | **否** | 性能 99 / 无障碍 100 / 最佳实践 100 / **SEO 83**（缺 meta description + robots.txt 非法） |
-| B6.3 | 首屏 chunk ≤250KB | **否** | 入口 chunk 291.8 KiB raw（gzip 87.7 KiB）；懒加载分割本身正确（pinyin/supabase 已分离） |
+| B6.3 | 首屏 JS 体积 | **否** | 当时口径 raw ≤250KB：入口 291.8 KiB（gzip 87.7 KiB）；懒加载分割本身正确（pinyin/supabase 已分离）。口径后续已修订为 gzip ≤100 kB —— 见第 1.2 节说明 |
 | B6.4 | manifest 完整 | 是 | 必填项 + 192/512 + maskable |
 | B6.5 | console 零 error/warn | 是 | 全流程测试 0 条 |
 | B6.6 | 离线可用 | **否** | 无 Service Worker（范围待定，决策 1） |
@@ -371,7 +376,7 @@
 | B3.3 高危依赖漏洞 | \`npm audit fix\` + 升级 vite 8 / plugin-react 6 | \`npm audit\`：**0 vulnerabilities** | **是** |
 | B4.3 无免责说明 | 两套 UI 页脚加「不构成任何医疗建议」 | 浏览器：两套 UI 均检出 | **是** |
 | B6.2 SEO 83 | 补 meta description + public/robots.txt | Lighthouse SEO **100** | **是** |
-| B6.3 首屏 chunk 超限 | 经典版 / 详情抽屉 / 备份弹窗 / 两个 Tab 视图全部改 React.lazy | 入口 JS **238.5 KiB**（原 291.8），gzip 75.1 KiB | **是** |
+| B6.3 首屏 chunk 超限 | 先把经典版/抽屉/备份/Tab 视图全部改 React.lazy（238.5 KiB）；后因"点需补货要等网络"的用户反馈，**把 Tab 视图放回首屏**，并改按 gzip 口径判定 | 入口 JS **253.1 kB raw / 约 80 kB gzip**（阈值 gzip ≤100 kB） | **是** |
 | B6.6 无离线能力 | 新增 \`public/sw.js\`（导航网络优先 + 静态缓存优先 + 版本化缓存），生产环境注册 | 浏览器：SW 已激活，**断网 reload 仍能打开** | **是** |
 | B7.3 无测试/CI 无门禁 | 服务层 77 断言测试 + 新增 \`.github/workflows/ci.yml\`（typecheck + test + build） | CI workflow 已推送执行 | **是** |
 | B7.5 无 lint 配置 | 新增 \`eslint.config.mjs\`（ESLint 10 + typescript-eslint + react-hooks） | \`npx eslint .\` **0 problems** | **是** |
