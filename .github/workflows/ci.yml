@@ -43,7 +43,7 @@ jobs:
 
       # 浏览器端验收：响应式 / 无障碍与键盘 / PWA 离线 / 数据安全 / 布局回归 / 历史缺陷回归
       # 依赖 runner 自带的 Chrome（脚本会自动探测；探测不到会以退出码 2 明确报错）
-      - name: 浏览器端 E2E（43 项）
+      - name: 浏览器端 E2E（56 项）
         run: npm run test:e2e
         env:
           E2E_CHROME: /usr/bin/google-chrome
