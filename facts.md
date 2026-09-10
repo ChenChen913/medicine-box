@@ -18,8 +18,8 @@
    来源：`package.json → scripts`
 7. **构建命令**：`npm run build`（= `tsc && vite build`）　预览：`npm run preview`
 8. **断言数量**：服务层 **171** + UI 逻辑 **91** = 262；浏览器 E2E **80**；合计 **342**
-   产生命令：`npm test` → `TOTAL=171 PASS=171 FAIL=0` / `TOTAL=91 PASS=91 FAIL=0`；`npm run test:e2e` → `E2E TOTAL=80 PASS=80 FAIL=0`
-9. **首屏体积**：入口 `index-*.js` **276.32 kB raw / 84.51 kB gzip**
+   产生命令：`npm test` → `TOTAL=171 PASS=171 FAIL=0` / `TOTAL=91 PASS=91 FAIL=0`；`npm run test:e2e` → `E2E TOTAL=85 PASS=85 FAIL=0`
+9. **首屏体积**：入口 `index-*.js` **259.58 kB raw / 81.16 kB gzip**（撤除内联演示数据后下降）
    产生命令：`npm run build`
 10. **变异测试**：5 条历史缺陷防线，5/5 可被用例集抓住
     产生命令：`node scripts/mutation-check.mjs`
@@ -32,7 +32,7 @@
     - `docs/` — 验收标准与判定记录、代码审查、经验沉淀
     - `public/` — 静态资源：PWA 图标、manifest、Service Worker `sw.js`
     - `.github/workflows/` — CI、GitHub Pages 部署、代码审查
-    - `backup/` — 演示数据快照
+    - `backup/` — 历史演示数据存档（仅作开发与测试夹具；应用启动不再自动载入任何数据）
     产生命令：`Get-ChildItem -Directory`
 12. **依赖（运行时）**：react 18.2 · react-dom 18.2 · @supabase/supabase-js 2.116 · pinyin-pro 3.29
 13. **依赖（开发）**：vite 8.2.2 · typescript 5.2 · tailwindcss 3.4 · @vitejs/plugin-react 6.1 · eslint 10.10 · typescript-eslint 8.70 · axe-core 4.13 · puppeteer-core 25.10 · esbuild 0.28

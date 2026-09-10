@@ -80,7 +80,7 @@ scripts/           测试与工具：服务层测试、UI 逻辑测试、浏览�
 supabase/          建表脚本 schema.sql（含 RLS 策略）
 public/            PWA 资源：图标、manifest、Service Worker sw.js
 docs/              验收标准与判定记录、代码审查、经验沉淀
-backup/            演示数据快照
+backup/            历史演示数据存档（仅作开发与测试夹具，应用不会读取）
 ```
 
 数据流：界面只调用 `services/` 暴露的方法；服务层读取时先判断是否配置了 Supabase，没有则走 localStorage，两条路径共用同一套业务规则。
@@ -100,11 +100,11 @@ npm run typecheck   # tsc --noEmit
 npm test            # 服务层 171 条 + UI 逻辑 91 条
 npm run lint        # eslint
 npm run build       # tsc && vite build
-npm run test:e2e    # 浏览器端 80 条（Puppeteer 驱动本机 Chrome）
+npm run test:e2e    # 浏览器端 85 条（Puppeteer 驱动本机 Chrome）
 npm run test:all    # 类型检查 + 单元 + lint + 浏览器 E2E
 ```
 
-数字都由命令产生，可自行复现：`npm test` 输出 `TOTAL=171 PASS=171 FAIL=0` 与 `TOTAL=91 PASS=91 FAIL=0`；`npm run test:e2e` 输出 `E2E TOTAL=80 PASS=80 FAIL=0`。
+数字都由命令产生，可自行复现：`npm test` 输出 `TOTAL=171 PASS=171 FAIL=0` 与 `TOTAL=91 PASS=91 FAIL=0`；`npm run test:e2e` 输出 `E2E TOTAL=85 PASS=85 FAIL=0`。
 
 浏览器端覆盖：渲染与响应式（320 / 360 / 390 / 768 / 1440）、核心链路、对抗输入（投毒备份、XSS、存储配额写失败）、
 无障碍与键盘（焦点管理、Tab 锁定、24×24 目标尺寸、axe 扫描 10 个界面状态）、PWA 离线、历史缺陷回归墙。
@@ -137,7 +137,7 @@ A：详情抽屉与备份弹窗按需加载，空闲时会预取；弱网下首�
 - 多标签页同时修改是 last-writer-wins，后写覆盖先写
 - 不做用药提醒推送与闹钟
 - 仅作记录用途，不构成任何医疗建议
-- 首屏存在内容位移（Lighthouse 桌面预设实测 CLS 0.9）：应用挂载后才异步读取数据，先渲染空壳再填充；修法是让本地存储分支在首帧前同步取数
+- 首次打开是空药箱，需要自己录第一种药（仓库 `backup/` 里有历史演示数据可供测试导入）
 
 ## 如何贡献
 

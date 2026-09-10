@@ -209,8 +209,35 @@ const activeInfo = page => page.evaluate(() => {
     isPanel: !!(a && d && a === d),
   };
 });
-async function openApp(page) {
+/**
+ * 测试夹具：演示数据已从应用里撤除（不再是产品行为），改由测试自己写入 localStorage。
+ * 源文件 backup/medicine-box-demo-backup-20260909.json 是导出信封格式，data 里才是库结构。
+ */
+const FIXTURE = JSON.parse(
+  fs.readFileSync(path.join(ROOT, 'backup', 'medicine-box-demo-backup-20260909.json'), 'utf8')
+).data;
+const PROD_RESET_FLAG = 'smart-medicine-box:prod-reset:v1';
+
+/**
+ * 打开应用。默认先把夹具写进 localStorage（多数用例需要药箱里有药）；
+ * 传 { seed: false } 保持空药箱，用于空态与"从零开始"的用例。
+ */
+/** 把夹具重新写回当前页面（用于那些故意清空数据之后的用例） */
+const reseed = page => page.evaluate((k, db, flag) => {
+  localStorage.setItem(k, JSON.stringify(db));
+  localStorage.setItem(flag, new Date().toISOString());
+}, DB_KEY, FIXTURE, PROD_RESET_FLAG);
+
+async function openApp(page, { seed = true } = {}) {
   await page.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  if (seed) {
+    await page.evaluate((k, db, flag) => {
+      localStorage.setItem(k, JSON.stringify(db));
+      // 必须同时写"投产清空"标记：否则首次读取会按遗留数据迁移逻辑把它清掉
+      localStorage.setItem(flag, new Date().toISOString());
+    }, DB_KEY, FIXTURE, PROD_RESET_FLAG);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+  }
   await page.waitForFunction(() => document.body.innerText.includes('我的药箱'), { timeout: 30000 });
   await page.waitForFunction(() => /全部储备种类/.test(document.body.innerText), { timeout: 30000 });
   await sleep(900);
@@ -565,16 +592,19 @@ async function main() {
     /* ============ G7 稳定性 ============ */
     group('G7 稳定性（弱网/异常不白屏）');
     {
-      // 7.1 演示数据请求挂死
+      // 7.1 启动不依赖任何数据请求
+      // 历史：这里曾拦住"演示数据"的请求不响应，验证页面不会因此白屏。
+      // 演示数据已于 2026-09-10 撤除（应用启动不再发任何数据请求），本用例改为守住这个新性质：
+      // 把数据类请求全部阻断，首屏仍须立即渲染 —— 一旦有人再把网络请求塞进启动路径，这条会红。
       const p1 = await newPage(browser, 390, 844, true);
       const c1 = await p1.target().createCDPSession();
-      await c1.send('Fetch.enable', { patterns: [{ urlPattern: '*demo-backup.json*' }] });
-      c1.on('Fetch.requestPaused', () => { /* 故意不响应 */ });
+      await c1.send('Network.enable');
+      await c1.send('Network.setBlockedURLs', { urls: ['*demo-backup.json*', '*supabase.co*'] });
       const t0 = Date.now();
       await p1.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 60000 });
       let rendered = false, ms = 0;
       for (let i = 0; i < 25; i++) { await sleep(300); rendered = await p1.evaluate(() => !!(document.getElementById('root') && document.getElementById('root').children.length)); if (rendered) { ms = Date.now() - t0; break; } }
-      record('G7.1', '演示数据请求挂死时页面仍在 6 秒内渲染（不白屏）', rendered && ms < 6000, '渲染=' + rendered + ' 用时=' + ms + 'ms');
+      record('G7.1', '启动不依赖数据请求：阻断数据类请求后仍立即渲染（不白屏）', rendered && ms < 3000, '渲染=' + rendered + ' 用时=' + ms + 'ms');
       await p1.close();
 
       // 7.2 分块加载失败
@@ -637,6 +667,9 @@ async function main() {
       record('BUG-10', '点「入库新药」焦点落在第一个输入框', fi.inside && fi.type === 'text', JSON.stringify(fi));
 
       // BUG-07 非法日历日期不得渲染成「已过期 NaN 天」
+      // 上一条用例（BUG-04）故意清空了药箱；演示数据撤除后不会再自动重填，这里显式补种
+      await reseed(p);
+      await p.reload({ waitUntil: 'domcontentloaded' }); await sleep(2000);
       await p.evaluate(k => { const d = JSON.parse(localStorage.getItem(k)); d.medicines[0].expiry_date = '2024-13-45'; localStorage.setItem(k, JSON.stringify(d)); }, DB_KEY);
       await p.reload({ waitUntil: 'domcontentloaded' }); await sleep(2200);
       const nanTxt = await p.evaluate(() => document.body.innerText);
@@ -1051,25 +1084,16 @@ async function main() {
         await scan(c, 'classic 首页（1440）');
         await c.close();
 
-        // 空药箱状态：新用户第一眼看到的界面。拦截演示数据文件，强制真正的空态。
+        // 空药箱状态：每个 newPage 都是全新浏览器上下文，不注入夹具即为空态
         const e1 = await newPage(browser, 390, 844, true);
-        await e1.setRequestInterception(true);
-        e1.on('request', r => (r.url().includes('demo-backup.json') ? r.abort() : r.continue()));
-        await e1.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 60000 });
-        await e1.evaluate(() => localStorage.clear());
-        await e1.reload({ waitUntil: 'domcontentloaded' });
-        await sleep(2500);
+        await openApp(e1, { seed: false });
         await scan(e1, 'modern 空药箱（390 移动端）');
         await e1.close();
 
         const e2 = await newPage(browser, 1440, 900);
-        await e2.setRequestInterception(true);
-        e2.on('request', r => (r.url().includes('demo-backup.json') ? r.abort() : r.continue()));
         await e2.goto(BASE + '?ui=classic', { waitUntil: 'domcontentloaded', timeout: 60000 });
-        await e2.evaluate(() => localStorage.clear());
-        await e2.reload({ waitUntil: 'domcontentloaded' });
         await e2.waitForFunction(() => document.getElementById('root') && document.getElementById('root').children.length > 0, { timeout: 30000 });
-        await sleep(2000);
+        await sleep(1500);
         await scan(e2, 'classic 空药箱（1440）');
         await e2.close();
       }
@@ -1221,6 +1245,65 @@ async function main() {
       record('G12.5', '弹层最大高度用 svh（地址栏收放时面板高度恒定）',
         /\.sheet-max[^{]*\{[^}]*max-height:\s*80svh/.test(css) && /\.sheet-max-form[^{]*\{[^}]*76svh/.test(css),
         'CSS 命中 svh 规则=' + /\.sheet-max[^{]*\{[^}]*max-height:\s*80svh/.test(css));
+      await p.close();
+    }
+
+    /* ============ G13 空药箱全链路（撤除演示数据后的回归） ============ */
+    group('G13 空药箱全链路');
+    {
+      // 老板要求：数据清空后功能必须与有数据时完全一致。
+      // 本组在【真正的空药箱】上把核心链路完整跑一遍；同样的不变量在 G2 里是在
+      // 注入 21 种药品的夹具上验证的 —— 两条路径断言一致，才说明功能不依赖既有数据。
+      const p = await newPage(browser, 1440, 900);
+      await openApp(p, { seed: false });
+      const empty = await p.evaluate(() => {
+        const t = document.body.innerText;
+        return {
+          noFixtureData: !/布洛芬|阿司匹林/.test(t),
+          grade: /待入库/.test(t),
+          notHundred: !/100%/.test(t.replace(/100%\s*$/m, '')),
+          zeroKinds: /全部储备种类[\s\S]{0,24}0\s*种/.test(t),
+        };
+      });
+      record('G13.1', '空药箱：不出现任何历史数据，评级为「待入库」而非 100% 达标',
+        empty.noFixtureData && empty.grade && empty.notHundred && empty.zeroKinds, JSON.stringify(empty));
+
+      const db0 = await readDB(p);
+      record('G13.2', '空药箱：首次打开不会凭空写入数据',
+        !db0 || ((db0.medicines || []).length === 0 && (db0.shoppingList || []).length === 0 && (db0.logs || []).length === 0),
+        JSON.stringify(db0 && { m: (db0.medicines || []).length, s: (db0.shoppingList || []).length, l: (db0.logs || []).length }));
+
+      await addMed(p, '空箱测试药', 10, '2027-12-31', '测试品牌');
+      const afterAdd = await readDB(p);
+      record('G13.3', '空药箱入库：卡片出现、字段完整（与有数据时行为一致）',
+        (afterAdd.medicines || []).length === 1 && afterAdd.medicines[0].total_quantity === 10 && afterAdd.medicines[0].brand === '测试品牌',
+        JSON.stringify({ n: (afterAdd.medicines || []).length, qty: afterAdd.medicines[0] && afterAdd.medicines[0].total_quantity }));
+
+      await openDetailByName(p, '空箱测试药');
+      await p.waitForFunction(() => {
+        const ds = Array.from(document.querySelectorAll('[role=dialog]'));
+        const d = ds[ds.length - 1];
+        return !!(d && Array.from(d.querySelectorAll('button')).some(b => /打卡|服药/.test((b.innerText || '').trim())));
+      }, { timeout: 15000 });
+      await clickInDialogMatch(p, '打卡|服药'); await sleep(700);
+      await clickInDialogMatch(p, '^确认打卡$');
+      const afterTake = await waitDb(p, d => (d.logs || []).length >= 1);
+      const m2 = (afterTake.medicines || []).find(m => m.name === '空箱测试药') || {};
+      record('G13.4', '空药箱打卡：库存扣减并写入带品牌的用药记录',
+        m2.total_quantity === 9 && (afterTake.logs || []).length === 1 && afterTake.logs[0].brand === '测试品牌',
+        'qty=' + m2.total_quantity + ' logs=' + (afterTake.logs || []).length + ' brand=' + (afterTake.logs[0] || {}).brand);
+      await p.keyboard.press('Escape'); await sleep(600);
+
+      await openDetailByName(p, '空箱测试药');
+      await waitLabel(p, '编辑药品', 15000);
+      await clickLabel(p, '编辑药品');
+      await waitLabel(p, '保存修改', 15000);
+      await setDate(p, '2020-01-01'); await sleep(300);
+      await clickLabel(p, '保存修改');
+      const afterExpire = await waitDb(p, d => (d.shoppingList || []).some(s => s.medicine_name === '空箱测试药'));
+      const item = (afterExpire.shoppingList || []).find(s => s.medicine_name === '空箱测试药') || {};
+      record('G13.5', '空药箱改为过期：自动进入补货清单且条目带 medicine_id',
+        !!item.medicine_id && !!item.reason, JSON.stringify({ id: item.medicine_id, reason: item.reason }));
       await p.close();
     }
 
