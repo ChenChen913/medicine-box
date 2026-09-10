@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { ErrorBoundary } from './modern/components/ErrorBoundary';
 import './index.css';
 
 const rootElement = document.getElementById('root');
@@ -55,8 +56,16 @@ async function loadDemoDataIfNeeded(): Promise<void> {
   }
 }
 
-// 先准备数据再挂载 React，保证界面首次读取时数据已经就位
-loadDemoDataIfNeeded()
+// 先准备数据再挂载 React，保证界面首次读取时数据已经就位。
+//
+// ⚠️ 必须限时：这个 await 在渲染之前，手机弱网下如果请求一直挂着，
+// 页面就会永远白屏（真实事故：老板在手机上遇到过一次）。超过 2.5 秒就先渲染，
+// 数据在后台继续载入，下次打开即可看到。
+const DEMO_LOAD_TIMEOUT_MS = 2500;
+Promise.race([
+  loadDemoDataIfNeeded(),
+  new Promise<void>(resolve => setTimeout(resolve, DEMO_LOAD_TIMEOUT_MS)),
+])
   .catch(e => {
     // 自动载入失败不该打断应用（离线、文件缺失等），仅记录
     console.info('[demo] 演示数据未载入：', e instanceof Error ? e.message : e);
@@ -65,7 +74,9 @@ loadDemoDataIfNeeded()
     const root = ReactDOM.createRoot(rootElement);
     root.render(
       <React.StrictMode>
-        <App />
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
       </React.StrictMode>
     );
   });

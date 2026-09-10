@@ -17,18 +17,35 @@ import { Icon } from './icons';
 import UISwitcher from '../ui/UISwitcher';
 import { useToasts, ToastStack } from './components/Toast';
 import { ConsumeDialog, DeleteDialog, MedicineForm } from './components/Dialogs';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { lazyWithRetry } from './lazyWithRetry';
 
 // 只有"交互后才会出现"的重组件：拆成独立 chunk 按需加载，不占首屏 JS 体积。
 // 首屏只需要药箱主界面（列表/统计/搜索），抽屉与备份弹窗点开时再下载。
-const DetailDrawer = React.lazy(() =>
+const DetailDrawer = lazyWithRetry(() =>
   import('./components/DetailDrawer').then(m => ({ default: m.DetailDrawer })));
-const DataBackupDialog = React.lazy(() =>
+const DataBackupDialog = lazyWithRetry(() =>
   import('./components/DataBackup').then(m => ({ default: m.DataBackupDialog })));
 // Tab 视图同理：默认进"我的药箱"，补货/用药记录页签点开时才需要
-const RestockView = React.lazy(() =>
+const RestockView = lazyWithRetry(() =>
   import('./components/Views').then(m => ({ default: m.RestockView })));
-const LogsView = React.lazy(() =>
+const LogsView = lazyWithRetry(() =>
   import('./components/Views').then(m => ({ default: m.LogsView })));
+
+/** 分块彻底加载失败时的兜底（配合 ErrorBoundary，避免白屏） */
+const lazyFailed = (what: string) => (_error: Error, reset: () => void) => (
+  <div className="fixed inset-0 z-[70] flex items-center justify-center bg-m3-on-surface/20 p-6">
+    <div className="max-w-sm w-full rounded-2xl bg-m3-surface-container-lowest shadow-lg p-5 text-center">
+      <div className="text-sm font-bold text-m3-on-surface mb-1">{what}加载失败</div>
+      <p className="text-xs text-m3-on-surface-variant leading-relaxed mb-3">
+        多半是网络抖动，数据没有丢失。请点重试或刷新页面。
+      </p>
+      <button type="button" onClick={reset} className="w-full py-2.5 rounded-xl bg-m3-primary text-m3-on-primary text-sm font-semibold">
+        重试
+      </button>
+    </div>
+  </div>
+);
 
 // 懒加载组件的占位：首屏不含这些组件，弱网下点开需要等一下——
 // 给出可见反馈，避免"点了没反应"被误当成卡死。
@@ -378,10 +395,17 @@ const ModernApp: React.FC = () => {
             </div>
           )}
 
-          <React.Suspense fallback={<div className="py-16 text-center text-sm text-m3-on-surface-variant">加载中…</div>}>
-            {view === 'restock' && <RestockView onChanged={refreshData} onGeneratePurchase={handleGeneratePurchase} />}
-            {view === 'logs' && <LogsView logs={logs} loading={loading} />}
-          </React.Suspense>
+          <ErrorBoundary fallback={(_error, reset) => (
+            <div className="py-16 text-center text-sm text-m3-on-surface-variant">
+              <div className="mb-3">页面加载失败，多半是网络抖动</div>
+              <button type="button" onClick={reset} className="px-5 py-2.5 rounded-xl bg-m3-primary text-m3-on-primary font-semibold">重试</button>
+            </div>
+          )}>
+            <React.Suspense fallback={<div className="py-16 text-center text-sm text-m3-on-surface-variant">加载中…</div>}>
+              {view === 'restock' && <RestockView onChanged={refreshData} onGeneratePurchase={handleGeneratePurchase} />}
+              {view === 'logs' && <LogsView logs={logs} loading={loading} />}
+            </React.Suspense>
+          </ErrorBoundary>
 
           {/* 页脚 */}
           <footer className="mt-12 md:mt-16 pt-6 border-t border-m3-surface-container-low flex flex-col sm:flex-row items-center justify-between gap-2 pb-4">
@@ -423,6 +447,7 @@ const ModernApp: React.FC = () => {
 
       {/* 抽屉与弹窗 */}
       {drawerMed && (
+        <ErrorBoundary fallback={lazyFailed('药品详情')}>
         <React.Suspense fallback={dialogLoading}>
           <DetailDrawer
             med={drawerMed}
@@ -434,6 +459,7 @@ const ModernApp: React.FC = () => {
             onDelete={setDeleteTarget}
           />
         </React.Suspense>
+        </ErrorBoundary>
       )}
       {consumeTarget && (
         <ConsumeDialog
@@ -468,6 +494,7 @@ const ModernApp: React.FC = () => {
 
       {/* 数据备份与恢复（导出/导入，新版 UI 入口：桌面顶栏 + 移动头部） */}
       {backupOpen && (
+        <ErrorBoundary fallback={lazyFailed('数据备份')}>
         <React.Suspense fallback={dialogLoading}>
           <DataBackupDialog
             onClose={() => setBackupOpen(false)}
@@ -478,6 +505,7 @@ const ModernApp: React.FC = () => {
             }}
           />
         </React.Suspense>
+        </ErrorBoundary>
       )}
 
       {!overlayOpen && <UISwitcher bottomClass="bottom-24 md:bottom-6" />}

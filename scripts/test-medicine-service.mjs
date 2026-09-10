@@ -232,7 +232,7 @@ async function buildBundle() {
   try {
     esbuild = await import('esbuild');
   } catch (e) {
-    throw new Error('找不到 esbuild：它是 devDependency，请先运行 npm install（' + (e && e.message) + '）');
+    throw new Error('找不到 esbuild：它是 devDependency，请先运行 npm install', { cause: e });
   }
   await esbuild.build({
     entryPoints: [SRC_FILE],

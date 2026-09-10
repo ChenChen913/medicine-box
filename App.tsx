@@ -10,26 +10,39 @@
  *       默认使用新版界面的用户不必为它付出首屏 JS 体积（此前两套 UI 都打进入口 chunk）。
  */
 
-import { lazy, Suspense } from 'react';
+import { Suspense } from 'react';
 import { UIModeProvider, useUIMode } from './ui/UIMode';
 import ModernApp from './modern/ModernApp';
+import { ErrorBoundary } from './modern/components/ErrorBoundary';
+import { lazyWithRetry } from './modern/lazyWithRetry';
 
-const ClassicApp = lazy(() => import('./ui/classic/ClassicApp'));
+const ClassicApp = lazyWithRetry(() => import('./ui/classic/ClassicApp'));
 
 function UIShell() {
   const { mode } = useUIMode();
   // 切换按钮由各 UI 自行渲染（位置需适配各自的底部导航与弹层布局）
   if (mode === 'modern') return <ModernApp />;
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center text-sm text-m3-on-surface-variant">
-          正在加载经典版界面…
+    <ErrorBoundary
+      fallback={(_error, reset) => (
+        <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-sm text-m3-on-surface-variant">
+          <div>经典版界面加载失败，多半是网络抖动</div>
+          <button type="button" onClick={reset} className="px-5 py-2.5 rounded-xl bg-m3-primary text-m3-on-primary font-semibold">
+            重试
+          </button>
         </div>
-      }
+      )}
     >
-      <ClassicApp />
-    </Suspense>
+      <Suspense
+        fallback={
+          <div className="min-h-screen flex items-center justify-center text-sm text-m3-on-surface-variant">
+            正在加载经典版界面…
+          </div>
+        }
+      >
+        <ClassicApp />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 
