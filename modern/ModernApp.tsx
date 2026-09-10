@@ -11,12 +11,15 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Medicine, ShoppingItem, UsageLog, ShoppingStatus } from '../types';
-import { MedicineService, todayDateString } from '../services/medicineService';
-import { getStatus, getHealthOverview } from './ui';
+import { MedicineService } from '../services/medicineService';
+import { getHealthOverview } from './ui';
 import { Icon } from './icons';
 import UISwitcher from '../ui/UISwitcher';
 import { useToasts, ToastStack } from './components/Toast';
 import { ConsumeDialog, DeleteDialog, MedicineForm } from './components/Dialogs';
+// Tab 视图是核心导航（底部导航栏直达），必须随首屏一起加载：
+// 之前拆成按需加载，弱网下点「需补货」要等分块下载才出内容（老板反馈"加载很长时间"）。
+import { RestockView, LogsView } from './components/Views';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { lazyWithRetry } from './lazyWithRetry';
 
@@ -26,12 +29,6 @@ const DetailDrawer = lazyWithRetry(() =>
   import('./components/DetailDrawer').then(m => ({ default: m.DetailDrawer })));
 const DataBackupDialog = lazyWithRetry(() =>
   import('./components/DataBackup').then(m => ({ default: m.DataBackupDialog })));
-// Tab 视图同理：默认进"我的药箱"，补货/用药记录页签点开时才需要
-const RestockView = lazyWithRetry(() =>
-  import('./components/Views').then(m => ({ default: m.RestockView })));
-const LogsView = lazyWithRetry(() =>
-  import('./components/Views').then(m => ({ default: m.LogsView })));
-
 /** 分块彻底加载失败时的兜底（配合 ErrorBoundary，避免白屏） */
 const lazyFailed = (what: string) => (_error: Error, reset: () => void) => (
   <div className="fixed inset-0 z-[70] flex items-center justify-center bg-m3-on-surface/20 p-6">
@@ -50,8 +47,10 @@ const lazyFailed = (what: string) => (_error: Error, reset: () => void) => (
 // 懒加载组件的占位：首屏不含这些组件，弱网下点开需要等一下——
 // 给出可见反馈，避免"点了没反应"被误当成卡死。
 const dialogLoading = (
-  <div className="fixed inset-0 z-[70] flex items-center justify-center bg-m3-on-surface/20">
-    <div className="rounded-2xl bg-m3-surface-container-lowest px-4 py-3 text-sm text-m3-on-surface-variant shadow-lg">
+  // 注意：不要铺全屏深色遮罩 —— 分块命中缓存时它只出现几十毫秒，
+  // 视觉上就是"黑影一闪而过"（老板在手机上反馈过）。
+  <div className="fixed inset-x-0 bottom-24 z-[70] flex justify-center pointer-events-none">
+    <div className="rounded-full bg-m3-surface-container-high/95 px-4 py-2 text-xs text-m3-on-surface-variant shadow-md">
       加载中…
     </div>
   </div>
@@ -208,36 +207,7 @@ const ModernApp: React.FC = () => {
       refreshData();
     });
 
-  const handleAddRestock = (med: Medicine) =>
-    runSafely(async () => {
-      const status = getStatus(med, todayDateString());
-      const reason = status.key === 'expired' ? '过期' : med.total_quantity === 0 ? '用尽' : '手动添加';
-      const added = await MedicineService.addToShoppingList([{ name: med.name, reason }]);
-      showToast(
-        added > 0 ? `已将「${med.name}」加入补货清单` : `「${med.name}」已在补货清单中，无需重复添加`,
-        added > 0 ? 'success' : 'warning'
-      );
-      refreshData();
-    });
-
-  const handleGeneratePurchase = () =>
-    runSafely(async () => {
-      const today = todayDateString();
-      const entries = medicines
-        .filter(m => {
-          const s = getStatus(m, today);
-          return s.key === 'low' || s.key === 'out';
-        })
-        .map(m => ({ name: m.name, reason: (m.total_quantity === 0 ? '用尽' : '手动添加') as ShoppingItem['reason'] }));
-      if (entries.length === 0) {
-        showToast('当前没有需要补货的药品，清单保持不变', 'warning');
-        return;
-      }
-      const added = await MedicineService.addToShoppingList(entries);
-      showToast(`已根据库存状况生成采购建议（新增 ${added} 项）`);
-      refreshData();
-      setView('restock');
-    });
+  // 补货清单由服务层规则自动维护（过期 / 用完），界面不再提供手动添加或"生成采购单"入口
 
   const handleDeleteDone = () =>
     runSafely(async () => {
@@ -388,7 +358,6 @@ const ModernApp: React.FC = () => {
                   boxEmpty={medicines.length === 0}
                   onRequestConsume={setConsumeTarget}
                   onOpenDetail={setDrawerMed}
-                  onAddToRestock={handleAddRestock}
                   onQuickConsume={handleQuickConsume}
                 />
               )}
@@ -401,10 +370,8 @@ const ModernApp: React.FC = () => {
               <button type="button" onClick={reset} className="px-5 py-2.5 rounded-xl bg-m3-primary text-m3-on-primary font-semibold">重试</button>
             </div>
           )}>
-            <React.Suspense fallback={<div className="py-16 text-center text-sm text-m3-on-surface-variant">加载中…</div>}>
-              {view === 'restock' && <RestockView onChanged={refreshData} onGeneratePurchase={handleGeneratePurchase} />}
-              {view === 'logs' && <LogsView logs={logs} loading={loading} />}
-            </React.Suspense>
+            {view === 'restock' && <RestockView onChanged={refreshData} />}
+            {view === 'logs' && <LogsView logs={logs} loading={loading} />}
           </ErrorBoundary>
 
           {/* 页脚 */}
@@ -454,7 +421,6 @@ const ModernApp: React.FC = () => {
             logs={logs}
             onClose={() => setDrawerMed(null)}
             onConsume={setConsumeTarget}
-            onRestock={handleAddRestock}
             onEdit={openEdit}
             onDelete={setDeleteTarget}
           />

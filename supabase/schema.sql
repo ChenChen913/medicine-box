@@ -21,6 +21,7 @@ create table if not exists public.medicines (
   symptoms_treated       text,
   dosage_instruction     text,
   daily_usage            double precision default 0,
+  dose_per_time          double precision,
   side_effects           text,
   usage_frequency_score  double precision default 0,
   updated_at             timestamptz default now()
@@ -59,6 +60,10 @@ alter table public.usage_logs add column if not exists brand text;
 -- 否则核销会按药名命中第一条，把库存写进错误记录。
 alter table public.shopping_list add column if not exists brand text;
 alter table public.shopping_list add column if not exists medicine_id text;
+
+-- ---------- 3.3 已有库的增量列（幂等）：每次用量 ----------
+-- 打卡弹窗的默认数量取自该列（旧数据为空时由 dosage_instruction 解析兜底）
+alter table public.medicines add column if not exists dose_per_time double precision;
 
 -- ============================================================================
 -- 4. 行级安全策略 (RLS)

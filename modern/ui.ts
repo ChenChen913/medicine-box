@@ -32,6 +32,21 @@ function daysBetween(fromStr: string, toStr: string): number {
   return Math.round((to.getTime() - from.getTime()) / 86400000);
 }
 
+/**
+ * 每次用量（单次服药量）：打卡弹窗与卡片快捷按钮的默认数量都取自这里。
+ *   1) 优先用显式字段 dose_per_time（入库时"每次 N 单位"填什么就是什么）；
+ *   2) 旧数据没有该字段 → 从 dosage_instruction（"每日X次，每次Y单位"）解析；
+ *   3) 都拿不到 → 兜底 1。
+ * 老板明确要求：入库写"每次两片"，点吃药就该默认 2 片（而不是按每日总量算）。
+ */
+export function getDosePerTime(med: Medicine): number {
+  const explicit = Number(med.dose_per_time);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  const m = /每次\s*(\d+(?:\.\d+)?)/.exec(med.dosage_instruction || '');
+  const parsed = m ? Number(m[1]) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
 /** 估算还能用几天（每日用量有效时才有意义） */
 export function usableDays(m: Medicine): number | null {
   if (!m.daily_usage || m.daily_usage <= 0) return null;

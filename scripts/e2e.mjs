@@ -123,12 +123,39 @@ const setInput = (page, matcher, value) => page.evaluate((m, v) => {
   el.dispatchEvent(new Event('change', { bubbles: true }));
   return true;
 }, matcher, value);
-const setDate = (page, v) => page.evaluate(v => {
-  const d = document.querySelector('input[type=date]'); if (!d) return false;
-  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(d, v);
-  d.dispatchEvent(new Event('input', { bubbles: true })); d.dispatchEvent(new Event('change', { bubbles: true }));
-  return true;
-}, v);
+/**
+ * 驱动自定义日期选择器（DateField）：打开 → 年份网格跳到目标年 → 月份网格选月 → 点日期。
+ * 年份网格支持左右翻页，这里会自动翻到目标年所在页。
+ */
+const setDate = async (page, iso, ariaLabel = '有效截止日期') => {
+  const [y, m] = iso.split('-');
+  const opened = await page.evaluate(l => {
+    const b = Array.from(document.querySelectorAll('button')).find(x => (x.getAttribute('aria-label') || '') === l);
+    if (!b) return false; b.click(); return true;
+  }, ariaLabel);
+  if (!opened) return 'NO_TRIGGER';
+  await sleep(400);
+  await page.evaluate(() => { const b = Array.from(document.querySelectorAll('button')).find(x => (x.getAttribute('aria-label') || '') === '选择年份'); if (b) b.click(); });
+  await sleep(300);
+  for (let i = 0; i < 8; i++) {
+    const found = await page.evaluate(yy => Array.from(document.querySelectorAll('button')).some(x => (x.innerText || '').trim() === yy), y);
+    if (found) break;
+    await page.evaluate(() => { const b = Array.from(document.querySelectorAll('button')).find(x => (x.getAttribute('aria-label') || '') === '下一页'); if (b) b.click(); });
+    await sleep(200);
+  }
+  await page.evaluate(yy => { const b = Array.from(document.querySelectorAll('button')).find(x => (x.innerText || '').trim() === yy); if (b) b.click(); }, y);
+  await sleep(300);
+  await page.evaluate(() => { const b = Array.from(document.querySelectorAll('button')).find(x => (x.getAttribute('aria-label') || '') === '选择月份'); if (b) b.click(); });
+  await sleep(300);
+  await page.evaluate(mm => { const b = Array.from(document.querySelectorAll('button')).find(x => (x.innerText || '').trim() === (Number(mm) + '月')); if (b) b.click(); }, m);
+  await sleep(300);
+  const picked = await page.evaluate(isoStr => {
+    const b = Array.from(document.querySelectorAll('button')).find(x => (x.getAttribute('aria-label') || '') === isoStr);
+    if (!b) return false; b.click(); return true;
+  }, iso);
+  await sleep(300);
+  return picked ? 'ok' : 'NO_DAY';
+};
 /** 在最上层弹窗内按正则找按钮并点击（弹窗与卡片上常有同名/近名按钮） */
 const clickInDialogMatch = (page, reSource) => page.evaluate(src => {
   const ds = Array.from(document.querySelectorAll('[role=dialog]'));
@@ -519,12 +546,15 @@ async function main() {
       await p1.close();
 
       // 7.2 分块加载失败
+      // Tab 视图已改回静态加载，仍按需加载的是"详情抽屉/备份弹窗"这类交互型分块
       const p2 = await newPage(browser, 390, 844, true);
-      await openApp(p2);
+      // 必须在打开页面之前就屏蔽：否则空闲预热（requestIdleCallback）会先把分块下载好，
+      // 屏蔽就失去意义了 —— 这也从侧面证明预热确实生效。
       const c2 = await p2.target().createCDPSession();
       await c2.send('Network.enable');
-      await c2.send('Network.setBlockedURLs', { urls: ['*Views-*.js'] });
-      await clickContains(p2, '需补货');
+      await c2.send('Network.setBlockedURLs', { urls: ['*DetailDrawer-*.js'] });
+      await openApp(p2);
+      await p2.evaluate(() => { const c = Array.from(document.querySelectorAll('[role=button]')).find(e => (e.innerText || '').includes('布洛芬')); if (c) c.click(); });
       await sleep(6000);
       const st = await p2.evaluate(() => ({
         len: document.body.innerText.trim().length,
@@ -532,7 +562,7 @@ async function main() {
         hasFail: /加载失败/.test(document.body.innerText),
         navAlive: /我的药箱/.test(document.body.innerText),
       }));
-      record('G7.2', '动态分块加载失败 → 显示「加载失败+重试」而非白屏', st.len > 30 && st.hasRetry && st.hasFail && st.navAlive, JSON.stringify(st));
+      record('G7.2', '按需分块加载失败 → 显示「加载失败+重试」而非白屏', st.len > 30 && st.hasRetry && st.hasFail && st.navAlive, JSON.stringify(st));
       await p2.close();
 
       // 7.3 反复切换页签/筛选
@@ -667,6 +697,142 @@ async function main() {
       }
       await q.close();
     }
+
+    /* ============ G9 本轮修复（补货规则 / 加载速度 / 默认剂量 / 日期选择器） ============ */
+    group('G9 本轮修复验证');
+    {
+      // G9.1 补货清单只剩"过期/用尽"：注入一条历史"手动添加"条目 + 一条规则内条目
+      const p = await newPage(browser, 1440, 900);
+      await openApp(p);
+      await p.evaluate(k => {
+        const d = JSON.parse(localStorage.getItem(k));
+        d.shoppingList.push({ id: 'e2e-manual', medicine_name: '感冒灵颗粒', reason: '手动添加', status: 'pending', created_at: new Date().toISOString() });
+        localStorage.setItem(k, JSON.stringify(d));
+      }, DB_KEY);
+      await p.reload({ waitUntil: 'domcontentloaded' }); await sleep(2500);
+      const dbAfter = await readDB(p);
+      const reasons = Array.from(new Set((dbAfter.shoppingList || []).map(s => s.reason)));
+      record('G9.1', '补货清单只保留「过期/用尽」，历史"手动添加"条目被自动清理',
+        !reasons.includes('手动添加') && reasons.every(r => r === '过期' || r === '用尽'),
+        '清单原因集合=' + JSON.stringify(reasons) + ' 条数=' + (dbAfter.shoppingList || []).length);
+
+      // G9.2 卡片/抽屉不再有手动加购入口
+      const manualBtns = await p.evaluate(() => {
+        const texts = Array.from(document.querySelectorAll('button,[role=button]')).map(e => (e.innerText || '').trim());
+        return texts.filter(t => /加入待购|清理提醒|加入补货|补货标记|一键生成采购单/.test(t));
+      });
+      record('G9.2', '卡片与详情不再提供"手动加入补货清单"入口', manualBtns.length === 0, JSON.stringify(manualBtns));
+
+      // G9.3 需补货页打开速度（此前要等按需分块下载）
+      const t0 = Date.now();
+      await clickContains(p, '需补货');
+      await p.waitForFunction(() => document.body.innerText.includes('需补货清单'), { timeout: 8000 });
+      const ms = Date.now() - t0;
+      record('G9.3', '点「需补货」在 1 秒内出内容（不再是"加载很长时间"）', ms < 1000, '耗时 ' + ms + 'ms');
+      const noPurchaseBtn = await p.evaluate(() => !/一键生成采购单/.test(document.body.innerText));
+      record('G9.4', '「一键生成采购单」按钮已移除', noPurchaseBtn);
+
+      // G9.5 打卡默认数量 = 入库时的「每次用量」
+      await p.evaluate(k => {
+        const d = JSON.parse(localStorage.getItem(k));
+        // ① 显式 dose_per_time=2；② 只有文案（旧数据）→ 应从"每次3粒"解析出 3
+        d.medicines.push({ id: 'e2e-dose-1', name: '每次两片药', form_type: '片剂', category: '其他', location: '', total_quantity: 10, unit: '片', threshold: 1, expiry_date: '2027-12-31', last_purchase_date: '2026-09-01', symptoms_treated: '', dosage_instruction: '每日2次，每次2片', daily_usage: 4, dose_per_time: 2, side_effects: '', usage_frequency_score: 0 });
+        d.medicines.push({ id: 'e2e-dose-2', name: '旧数据每次三粒', form_type: '胶囊', category: '其他', location: '', total_quantity: 10, unit: '粒', threshold: 1, expiry_date: '2027-12-31', last_purchase_date: '2026-09-01', symptoms_treated: '', dosage_instruction: '每日3次，每次3粒', daily_usage: 9, side_effects: '', usage_frequency_score: 0 });
+        localStorage.setItem(k, JSON.stringify(d));
+      }, DB_KEY);
+      await p.reload({ waitUntil: 'domcontentloaded' }); await sleep(2500);
+      const doseExplicit = await p.evaluate(async () => {
+        const card = Array.from(document.querySelectorAll('[role=button]')).find(e => (e.innerText || '').includes('每次两片药'));
+        if (!card) return 'NO_CARD';
+        card.click();
+        await new Promise(r => setTimeout(r, 1200));
+        const ds = Array.from(document.querySelectorAll('[role=dialog]'));
+        const d = ds[ds.length - 1];
+        const btn = d && Array.from(d.querySelectorAll('button')).find(b => /打卡|服药/.test((b.innerText || '').trim()));
+        if (!btn) return 'NO_BTN';
+        btn.click();
+        await new Promise(r => setTimeout(r, 900));
+        const ds2 = Array.from(document.querySelectorAll('[role=dialog]'));
+        const d2 = ds2[ds2.length - 1];
+        const big = d2 ? d2.querySelector('.text-4xl') : null;
+        return big ? (big.textContent || '').trim() : 'NO_NUM:' + (d2 ? d2.innerText.slice(0, 40) : 'none');
+      });
+      record('G9.5', '打卡弹窗默认数量取「每次用量」（显式字段=2）', doseExplicit === '2', '实际显示=' + doseExplicit);
+      await p.keyboard.press('Escape'); await sleep(600);
+
+      const doseParsed = await p.evaluate(async () => {
+        const card = Array.from(document.querySelectorAll('[role=button]')).find(e => (e.innerText || '').includes('旧数据每次三粒'));
+        if (!card) return 'NO_CARD';
+        card.click();
+        await new Promise(r => setTimeout(r, 1200));
+        const ds = Array.from(document.querySelectorAll('[role=dialog]'));
+        const d = ds[ds.length - 1];
+        const btn = d && Array.from(d.querySelectorAll('button')).find(b => /打卡|服药/.test((b.innerText || '').trim()));
+        if (!btn) return 'NO_BTN';
+        btn.click();
+        await new Promise(r => setTimeout(r, 900));
+        const ds2 = Array.from(document.querySelectorAll('[role=dialog]'));
+        const d2 = ds2[ds2.length - 1];
+        const big = d2 ? d2.querySelector('.text-4xl') : null;
+        return big ? (big.textContent || '').trim() : 'NO_NUM';
+      });
+      record('G9.6', '旧数据（无该字段）从"每次3粒"解析出默认 3', doseParsed === '3', '实际显示=' + doseParsed);
+      await p.keyboard.press('Escape'); await sleep(600);
+
+      // G9.7 日期选择器：年份一键跳转
+      // 先把前面打开的弹窗/抽屉都关掉：真实鼠标点击会被遮罩挡住
+      for (let i = 0; i < 4; i++) {
+        if (!(await p.evaluate(() => !!document.querySelector('[role=dialog]')))) break;
+        await p.keyboard.press('Escape');
+        await sleep(500);
+      }
+      await realClick(p, '入库新药');
+      await p.waitForSelector('[role=dialog]', { timeout: 15000 }); await sleep(800);
+      const opened = await p.evaluate(() => {
+        const ds = Array.from(document.querySelectorAll('[role=dialog]'));
+        const d = ds[ds.length - 1];
+        const btn = d && Array.from(d.querySelectorAll('button')).find(b => (b.getAttribute('aria-label') || '') === '有效截止日期');
+        if (!btn) return 'NO_TRIGGER';
+        btn.click(); return 'ok';
+      });
+      await sleep(600);
+      const yearJump = await p.evaluate(() => {
+        const yb = Array.from(document.querySelectorAll('button')).find(b => (b.getAttribute('aria-label') || '') === '选择年份');
+        if (!yb) return 'NO_YEAR_BTN';
+        yb.click();
+        return 'clicked:' + (yb.innerText || '').trim();
+      });
+      await sleep(500);
+      const yearPicked = await p.evaluate(() => {
+        const btns = Array.from(document.querySelectorAll('button')).filter(b => /^\d{4}$/.test((b.innerText || '').trim()));
+        const target = btns.find(b => (b.innerText || '').trim() === '2030') || btns[3];
+        if (!target) return 'NO_YEAR_CELL';
+        const y = (target.innerText || '').trim();
+        target.click();
+        return y;
+      });
+      await sleep(500);
+      const dayPicked = await p.evaluate(() => {
+        const btns = Array.from(document.querySelectorAll('button')).filter(b => /^\d{4}-\d{2}-\d{2}$/.test(b.getAttribute('aria-label') || ''));
+        const t = btns.find(b => (b.getAttribute('aria-label') || '').endsWith('-15')) || btns[14];
+        if (!t) return 'NO_DAY_CELL';
+        const v = t.getAttribute('aria-label');
+        t.click();
+        return v;
+      });
+      await sleep(600);
+      const shown = await p.evaluate(() => {
+        const ds = Array.from(document.querySelectorAll('[role=dialog]'));
+        const d = ds[ds.length - 1];
+        const btn = d && Array.from(d.querySelectorAll('button')).find(b => (b.getAttribute('aria-label') || '') === '有效截止日期');
+        return btn ? (btn.innerText || '').trim() : 'NO_TRIGGER';
+      });
+      record('G9.7', '新日期选择器：可一键跳到年份网格并选中年份/日期',
+        String(yearPicked).startsWith('20') && String(dayPicked).startsWith('20') && shown.includes('年'),
+        '打开=' + opened + ' 年份按钮=' + yearJump + ' 选中=' + yearPicked + '-' + dayPicked + ' 触发按钮显示=' + shown);
+      await p.close();
+    }
+
   } finally {
     try { await BROWSER.close(); } catch { /* ignore */ }
     try { server.kill(); } catch { /* ignore */ }

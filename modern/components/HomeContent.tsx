@@ -18,7 +18,6 @@ export type FilterKey = 'all' | 'normal' | 'low' | 'expiring' | 'expired';
 export type CardActions = {
   onRequestConsume: (med: Medicine) => void;
   onOpenDetail: (med: Medicine) => void;
-  onAddToRestock: (med: Medicine) => void;
   onQuickConsume: (med: Medicine) => void;
 };
 

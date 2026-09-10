@@ -729,8 +729,10 @@ async function main() {
     });
     return '入库即核销';
   });
-  await run('D8', '编辑药品手动补货（库存增加 + previous）：刷新最近购入并核销提醒', async () => {
-    seedDB({ medicines: [makeMed({ id: 'D-8', name: '手动补货药', total_quantity: 1 })], shoppingList: [makeItem({ id: 'D-8-item', medicine_name: '手动补货药' })], logs: [] }, 'migrated');
+  // 注：2026-09-10 起补货清单规则收紧为「过期 / 用尽」两种，历史「手动添加」条目不再产生，
+  // 因此这里用规则内的「用尽」条目来做"编辑加库存 → 核销提醒"的断言（语义不变）。
+  await run('D8', '编辑药品补货（库存增加 + previous）：刷新最近购入并核销提醒', async () => {
+    seedDB({ medicines: [makeMed({ id: 'D-8', name: '手动补货药', total_quantity: 1 })], shoppingList: [makeItem({ id: 'D-8-item', medicine_name: '手动补货药', reason: '用尽' })], logs: [] }, 'migrated');
     const before = (await S.getMedicines()).find(m => m.id === 'D-8');
     const r = await S.updateMedicine(Object.assign({}, before, { total_quantity: 30, last_purchase_date: '2020-01-01' }), { previous: before });
     const after = (await S.getMedicines()).find(m => m.id === 'D-8');

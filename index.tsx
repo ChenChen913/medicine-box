@@ -91,6 +91,19 @@ Promise.race([
     );
   });
 
+// 空闲时预热"按需加载"的两个弹窗分块：
+// 首次点开药品详情/备份弹窗时就不必等下载，也避免"加载中"占位一闪而过。
+const prefetchDialogs = (): void => {
+  void import('./modern/components/DetailDrawer');
+  void import('./modern/components/DataBackup');
+};
+if ('requestIdleCallback' in window) {
+  (window as Window & { requestIdleCallback: (cb: () => void, opts?: { timeout: number }) => void })
+    .requestIdleCallback(prefetchDialogs, { timeout: 3000 });
+} else {
+  setTimeout(prefetchDialogs, 1500);
+}
+
 // 注册 Service Worker（仅生产构建）：提供离线外壳。
 // 开发环境不注册，避免缓存干扰 Vite 的 HMR。
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {

@@ -7,7 +7,7 @@
  *       全部展示真实数据：库存、效期、用法、禁忌、位置、适应症、
  *       该药最近打卡时间线（usage_logs）；
  *       「30 天库存消耗趋势」由当前库存 + 打卡记录反推估算（无记录时优雅降级）。
- *       操作：补货标记 / 打卡服药 / 编辑 / 删除。
+ *       操作：打卡服药 / 编辑 / 删除。
  */
 
 import React, { useMemo } from 'react';
@@ -22,7 +22,6 @@ interface Props {
   logs: UsageLog[];
   onClose: () => void;
   onConsume: (med: Medicine) => void;
-  onRestock: (med: Medicine) => void;
   onEdit: (med: Medicine) => void;
   onDelete: (med: Medicine) => void;
 }
@@ -70,7 +69,7 @@ function estimateTrend(med: Medicine, logs: UsageLog[]): { points: { x: number; 
   return { points, consumed };
 }
 
-export const DetailDrawer: React.FC<Props> = ({ med, logs, onClose, onConsume, onRestock, onEdit, onDelete }) => {
+export const DetailDrawer: React.FC<Props> = ({ med, logs, onClose, onConsume, onEdit, onDelete }) => {
   // 焦点管理：打开时移入、Tab 锁在抽屉内、关闭后归位
   const panelRef = useDialogA11y<HTMLDivElement>();
 
@@ -234,13 +233,6 @@ export const DetailDrawer: React.FC<Props> = ({ med, logs, onClose, onConsume, o
 
         {/* 底部操作（含手机端安全区适配，避开 iPhone Home 横条） */}
         <div className="px-5 md:px-6 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-4 border-t border-m3-surface-container-low flex items-center gap-3 bg-m3-surface-container-lowest shrink-0">
-          <button
-            type="button"
-            onClick={() => onRestock(med)}
-            className="flex-1 py-2.5 rounded-full bg-m3-surface-container-low hover:bg-m3-surface-container text-m3-on-surface text-sm font-medium transition-colors"
-          >
-            补货标记
-          </button>
           <button
             type="button"
             disabled={med.total_quantity <= 0 || status.key === 'expired'}

@@ -306,7 +306,7 @@ type Row = any;
 const MEDICINE_COLUMNS = [
   'id', 'name', 'brand', 'image_url', 'form_type', 'category', 'location', 'total_quantity', 'unit',
   'threshold', 'expiry_date', 'last_purchase_date', 'symptoms_treated', 'dosage_instruction',
-  'daily_usage', 'side_effects', 'usage_frequency_score',
+  'daily_usage', 'dose_per_time', 'side_effects', 'usage_frequency_score',
 ];
 
 const num = (v: unknown): number => {
@@ -341,6 +341,7 @@ function medToRow(m: Medicine): Row {
     symptoms_treated: m.symptoms_treated || null,
     dosage_instruction: m.dosage_instruction || null,
     daily_usage: num(m.daily_usage),
+    dose_per_time: m.dose_per_time === undefined ? null : num(m.dose_per_time),
     side_effects: m.side_effects || null,
     usage_frequency_score: num(m.usage_frequency_score),
     // 显式携带 updated_at：schema 里的 default now() 只在 insert 生效，
@@ -366,6 +367,7 @@ function rowToMed(r: Row): Medicine {
     symptoms_treated: String(r.symptoms_treated ?? ''),
     dosage_instruction: String(r.dosage_instruction ?? ''),
     daily_usage: num(r.daily_usage),
+    ...(num(r.dose_per_time) > 0 ? { dose_per_time: num(r.dose_per_time) } : {}),
     side_effects: String(r.side_effects ?? ''),
     usage_frequency_score: num(r.usage_frequency_score),
   };
@@ -502,9 +504,18 @@ async function writeDB(db: DBStructure): Promise<void> {
   localWrite(db);
 }
 
+/** 补货清单的唯一规则：过期 或 用完。其余原因（如历史遗留的"手动添加"）一律不进清单。 */
+export const RESTOCK_REASONS: ShoppingItem['reason'][] = ['过期', '用尽'];
+
 /**
- * 过期检测：把「已过期且尚无待补货条目」的药品加入补货清单。
- * 在传入的 data 上原地修改，返回是否有变更。
+ * 补货清单同步（唯一真相来源）：每次读取药品时执行，在传入的 data 上原地修改，
+ * 返回是否有变更。
+ *
+ * 规则（老板 2026-09-10 明确）——**只有两种情况需要补货**：
+ *   1. 已过期（expiry_date < 今天）
+ *   2. 已用完（total_quantity === 0）
+ * 另外会清理历史遗留的"手动添加"条目，保证清单里列出的就是全部需要补货的药品。
+ *
  * 注意：必须在调用方持有的同一个数据对象上操作并单次写回，
  * 不要在函数内部重新 readDB —— 否则会与调用方的写回互相覆盖（旧版播种流程的丢失 bug）。
  */
@@ -514,26 +525,41 @@ function addExpiredToShoppingList(data: DBStructure): boolean {
   let hasChanges = false;
 
   data.medicines.forEach(med => {
-    if (med.expiry_date && med.expiry_date < today) {
-      // 去重必须精确到"这一条药品"：只按药名去重会让同名不同品牌的两条共用一个条目，
-      // 后续核销时无法区分该补哪一条（历史上会把库存写错记录）。
-      const exists = data.shoppingList.find(
-        item => item.status === ShoppingStatus.PENDING && isItemForMedicine(item, med)
-      );
-      if (!exists) {
-        data.shoppingList.push({
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          medicine_name: med.name,
-          ...(med.brand ? { brand: med.brand } : {}),
-          medicine_id: String(med.id),
-          reason: '过期',
-          status: ShoppingStatus.PENDING,
-          created_at: new Date().toISOString(),
-        });
-        hasChanges = true;
-      }
+    const expired = !!med.expiry_date && med.expiry_date < today;
+    const usedUp = med.total_quantity === 0;
+    if (!expired && !usedUp) return;
+
+    const reason: ShoppingItem['reason'] = expired ? '过期' : '用尽';
+
+    // 去重必须精确到"这一条药品"：只按药名去重会让同名不同品牌的两条共用一个条目，
+    // 后续核销时无法区分该补哪一条（历史上会把库存写错记录）。
+    const exists = data.shoppingList.find(
+      item => item.status === ShoppingStatus.PENDING && isItemForMedicine(item, med)
+    );
+    if (exists) {
+      // 原因可能变化（先用完后来过期 / 反之），保持与实际状态一致
+      if (exists.reason !== reason) { exists.reason = reason; hasChanges = true; }
+      return;
     }
+    data.shoppingList.push({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      medicine_name: med.name,
+      ...(med.brand ? { brand: med.brand } : {}),
+      medicine_id: String(med.id),
+      reason,
+      status: ShoppingStatus.PENDING,
+      created_at: new Date().toISOString(),
+    });
+    hasChanges = true;
   });
+
+  // 清理规则外的历史条目（旧版本的「手动添加」「加入待购」产物），
+  // 保证"清单里列出的 = 所有需要补货的药品"这条语义成立。
+  const kept = data.shoppingList.filter(item => RESTOCK_REASONS.includes(item.reason));
+  if (kept.length !== data.shoppingList.length) {
+    data.shoppingList = kept;
+    hasChanges = true;
+  }
 
   return hasChanges;
 }
@@ -579,7 +605,9 @@ export const MedicineService = {
   },
 
   /**
-   * 手动把药品加入补货清单（新 UI 的「加入待购」「一键生成采购单」使用）。
+   * @deprecated 2026-09-10 起补货清单只由规则产生（过期 / 用完），界面已移除手动加购入口。
+   * 该接口仅为历史数据兼容与测试保留，业务代码不要再调用 —— 它产生的「手动添加」条目
+   * 会在下次读取时被 addExpiredToShoppingList 自动清理掉。
    * 幂等：同名药品已有待补货条目时跳过，返回实际新增条数。
    */
   addToShoppingList: async (
@@ -1054,6 +1082,7 @@ function sanitizeMedicine(raw: unknown): Medicine | null {
     symptoms_treated: str(r.symptoms_treated),
     dosage_instruction: str(r.dosage_instruction),
     daily_usage: nonNegNum(r.daily_usage),
+    ...(nonNegNum(r.dose_per_time) > 0 ? { dose_per_time: nonNegNum(r.dose_per_time) } : {}),
     side_effects: str(r.side_effects, '详见说明书'),
     usage_frequency_score: nonNegNum(r.usage_frequency_score),
   };

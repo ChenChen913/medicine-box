@@ -17,8 +17,9 @@ import {
   FORM_UNIT_MAP, isRestockMatch, isSameMedicineIdentity, normBrand,
 } from '../../services/medicineService';
 import { Icon, IconName } from '../icons';
-import { getCategoryMeta } from '../ui';
+import { getCategoryMeta, getDosePerTime } from '../ui';
 import { M3Select, SelectOption } from './Select';
+import { DateField } from './DateField';
 import { useDialogA11y } from '../useDialogA11y';
 
 // ---------- 通用弹窗外壳 ----------
@@ -72,7 +73,9 @@ export const ModalShell: React.FC<{ title: string; subtitle?: string; icon?: Ico
 interface ConsumeProps { med: Medicine; onClose: () => void; onDone: (amount: number) => void; }
 
 export const ConsumeDialog: React.FC<ConsumeProps> = ({ med, onClose, onDone }) => {
-  const [amount, setAmount] = useState(() => Math.max(1, Math.min(med.daily_usage || 1, med.total_quantity)));
+  // 默认数量 = 入库时填的「每次用量」（如"每次2片" → 默认 2），用户可自行增减；上限为当前库存
+  const perDose = getDosePerTime(med);
+  const [amount, setAmount] = useState(() => Math.min(perDose, Math.max(1, med.total_quantity)));
   const max = Math.max(1, med.total_quantity);
 
   return (
@@ -151,8 +154,7 @@ export const RestockDialog: React.FC<RestockProps> = ({ item, onClose, onDone })
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold text-m3-on-surface">新有效期至</span>
-          <input type="date" value={expiry} onChange={e => setExpiry(e.target.value)}
-            className="h-11 px-4 rounded-xl bg-m3-surface-container-low text-m3-on-surface outline-none focus:ring-2 focus:ring-m3-primary/30 transition-all" />
+          <DateField value={expiry} onChange={setExpiry} ariaLabel="新有效期至" />
         </label>
         {error && (
           <p className="rounded-xl p-3 bg-m3-error-container text-m3-error text-xs leading-relaxed" role="alert">{error}</p>
@@ -295,11 +297,20 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, allMedicines, pendi
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError('');
+    // 有效期改用自定义日期选择器后，原生 required 不再生效，这里显式校验
+    if (!form.expiry_date && !editing?.expiry_date) {
+      setSubmitError('请选择有效截止日期');
+      return;
+    }
     let finalDosage = form.dosage_instruction || '';
     let estimatedDaily = Number(form.daily_usage) || 0;
+    let dosePerTime: number | undefined;
     if (dosageFreq && dosageAmount) {
       finalDosage = `每日${dosageFreq}次，每次${dosageAmount}${form.unit}`;
       estimatedDaily = parseFloat(dosageFreq) * parseFloat(dosageAmount);
+      // 记住"每次用量"：打卡弹窗的默认数量要用它（老板 2026-09-10 需求）
+      const per = parseFloat(dosageAmount);
+      if (Number.isFinite(per) && per > 0) dosePerTime = per;
     }
 
     const common = {
@@ -316,6 +327,7 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, allMedicines, pendi
       symptoms_treated: form.symptoms_treated || '',
       dosage_instruction: finalDosage,
       daily_usage: estimatedDaily,
+      dose_per_time: dosePerTime,
       side_effects: form.side_effects || '详见说明书',
       // 用户明确移除图片（imageRemoved）时必须真正清掉旧图而不是回退保留历史值
       image_url: imageRemoved ? undefined : (form.image_url ?? editing?.image_url),
@@ -489,7 +501,13 @@ export const MedicineForm: React.FC<FormProps> = ({ editing, allMedicines, pendi
           </label>
           <label className="flex flex-col gap-1.5 col-span-1">
             <span className={labelCls}>有效截止日期</span>
-            <input required type="date" className={`${inputCls} cursor-pointer`} value={form.expiry_date || ''} onChange={e => setForm({ ...form, expiry_date: e.target.value })} />
+            <DateField
+              value={form.expiry_date || ''}
+              onChange={v => setForm(prev => ({ ...prev, expiry_date: v }))}
+              ariaLabel="有效截止日期"
+              className={inputCls + ' text-left'}
+              placeholder="选择有效期"
+            />
           </label>
         </div>
 

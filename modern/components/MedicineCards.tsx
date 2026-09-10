@@ -3,13 +3,12 @@
  * 功能: 新版 UI 的药品卡片
  * 描述: 三种卡片形态，均按设计稿还原并接入真实数据：
  *       - DesktopCard  桌面端大卡（渐变图标方块 + 适应症条 + 大号库存 + 吃药按钮）
- *       - MobileCard   移动端大卡（三列库存读数区 + 吃药按钮）
- *       - MobileCard 移动端卡片（全部类别统一单列大卡，含库存/效期/用法与快捷打卡）
+ *       - MobileCard   移动端大卡（三列库存读数区 + 吃药按钮；全部类别统一单列）
  */
 
 import React from 'react';
 import { Medicine } from '../../types';
-import { getStatus, usableDays, formatExpiryShort, getCategoryMeta } from '../ui';
+import { getStatus, usableDays, formatExpiryShort, getCategoryMeta, getDosePerTime } from '../ui';
 import { Icon } from '../icons';
 
 export const CONSUME_PLACEHOLDER = '__dialog__';
@@ -18,7 +17,6 @@ interface CardActions {
   /** 打开数量确认弹窗（桌面/移动大卡）；传 CONSUME_PLACEHOLDER */
   onRequestConsume: (med: Medicine) => void;
   onOpenDetail: (med: Medicine) => void;
-  onAddToRestock: (med: Medicine) => void;
   /** 移动端小卡「取用」直接扣 1 件 */
   onQuickConsume?: (med: Medicine) => void;
 }
@@ -62,7 +60,8 @@ function DosageLine({ med, className = '' }: { med: Medicine; className?: string
 
 /** 吃药打卡按钮（默认剂量 = 每次用量，库存不足时 clamp） */
 export function ConsumeButton({ med, onClick, label }: { med: Medicine; onClick: () => void; label?: string }) {
-  const dose = Math.max(1, Math.min(med.daily_usage || 1, med.total_quantity));
+  // 快捷打卡的数量同样取「每次用量」（与打卡弹窗口径一致）
+  const dose = Math.min(getDosePerTime(med), Math.max(1, med.total_quantity));
   const disabled = med.total_quantity <= 0 || getStatus(med).key === 'expired';
   return (
     <button
@@ -79,7 +78,7 @@ export function ConsumeButton({ med, onClick, label }: { med: Medicine; onClick:
 
 // ============ 桌面大卡 ============
 
-export const DesktopCard: React.FC<{ med: Medicine } & CardActions> = ({ med, onRequestConsume, onOpenDetail, onAddToRestock }) => {
+export const DesktopCard: React.FC<{ med: Medicine } & CardActions> = ({ med, onRequestConsume, onOpenDetail }) => {
   const status = getStatus(med);
   const remain = usableDays(med);
 
@@ -110,14 +109,6 @@ export const DesktopCard: React.FC<{ med: Medicine } & CardActions> = ({ med, on
           </div>
           {status.key === 'expired' ? (
             <span className="text-[11px] text-m3-error font-medium shrink-0">有效期至 {formatExpiryShort(med.expiry_date)}</span>
-          ) : status.key === 'low' || status.key === 'out' ? (
-            <button
-              type="button"
-              onClick={() => onAddToRestock(med)}
-              className="text-[11px] text-m3-primary hover:underline flex items-center gap-0.5 shrink-0 min-h-[24px] px-1 -mx-1 rounded"
-            >
-              + 加入待购
-            </button>
           ) : (
             <span className="text-[11px] text-m3-on-surface-variant shrink-0">有效期至 {formatExpiryShort(med.expiry_date)}</span>
           )}
@@ -143,7 +134,7 @@ export const DesktopCard: React.FC<{ med: Medicine } & CardActions> = ({ med, on
 
 // ============ 移动大卡 ============
 
-export const MobileCard: React.FC<{ med: Medicine } & CardActions> = ({ med, onRequestConsume, onOpenDetail, onAddToRestock }) => {
+export const MobileCard: React.FC<{ med: Medicine } & CardActions> = ({ med, onRequestConsume, onOpenDetail }) => {
   const status = getStatus(med);
   const remain = usableDays(med);
 
@@ -178,23 +169,12 @@ export const MobileCard: React.FC<{ med: Medicine } & CardActions> = ({ med, onR
         </div>
       </div>
 
-      {/* 操作区：过期 → 清理提醒（加入补货清单）；告急 → 加入补货；其余 → 吃药打卡 */}
+      {/* 操作区：打卡。补货清单完全由规则产生（过期 / 用完），不再提供"手动加入"入口 */}
       <div className="flex items-center justify-between gap-2">
         <DosageLine med={med} className="flex-1" />
-        {status.key === 'expired' || status.key === 'low' || status.key === 'out' ? (
-          <button
-            type="button"
-            onClick={e => { e.stopPropagation(); onAddToRestock(med); }}
-            className="flex items-center gap-1 px-3.5 py-1.5 rounded-full bg-m3-surface-container text-m3-primary text-xs font-semibold active:scale-95 transition-all shrink-0"
-          >
-            <Icon name="shopping_cart" className="w-4 h-4" />
-            <span>{status.key === 'expired' ? '清理提醒' : '加入补货'}</span>
-          </button>
-        ) : (
-          <span onClick={e => e.stopPropagation()} role="presentation">
-            <ConsumeButton med={med} onClick={() => onRequestConsume(med)} />
-          </span>
-        )}
+        <span onClick={e => e.stopPropagation()} role="presentation">
+          <ConsumeButton med={med} onClick={() => onRequestConsume(med)} />
+        </span>
       </div>
     </div>
   );

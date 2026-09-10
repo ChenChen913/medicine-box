@@ -40,6 +40,13 @@ export interface Medicine {
   symptoms_treated: string; // 适应症
   dosage_instruction: string; // 服用说明 (文本)
   daily_usage: number; // 每日估算用量 (用于计算大概还能吃几天)
+  /**
+   * 每次用量（单次服药量，如"每次 2 片"里的 2）。
+   * 打卡弹窗的默认数量取这个值——用户明确要求：入库时写"每次两片"，
+   * 打卡就应该默认 2 片，而不是按每日总量算。
+   * 旧数据可能没有该字段，此时回退到解析 dosage_instruction。
+   */
+  dose_per_time?: number;
   side_effects: string; // 副作用 (长文本)
   usage_frequency_score: number; // 核心算法字段: 使用频率分数 (排序用)
 }
