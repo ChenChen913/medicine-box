@@ -59,6 +59,8 @@ export interface UsageLog {
 export interface ShoppingItem {
   id: string;
   medicine_name: string;
+  brand?: string; // 品牌（可选）：同名不同品牌时用于精确定位补货对象
+  medicine_id?: string; // 药品 id（可选，新数据携带）：核销/删除时精确定位，杜绝同名误伤
   reason: '过期' | '用尽' | '手动添加'; // 加入原因
   status: ShoppingStatus;
   created_at: string;

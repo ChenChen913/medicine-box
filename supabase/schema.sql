@@ -30,6 +30,8 @@ create table if not exists public.medicines (
 create table if not exists public.shopping_list (
   id             text primary key,
   medicine_name  text not null,
+  brand          text,
+  medicine_id    text,
   reason         text check (reason in ('过期', '用尽', '手动添加')),
   status         text default 'pending' check (status in ('pending', 'bought')),
   created_at     timestamptz default now()
@@ -51,6 +53,12 @@ create index if not exists usage_logs_log_time_idx on public.usage_logs (log_tim
 -- ---------- 3.1 已有库的增量列（幂等）：品牌字段 ----------
 alter table public.medicines  add column if not exists brand text;
 alter table public.usage_logs add column if not exists brand text;
+
+-- ---------- 3.2 已有库的增量列（幂等）：补货条目精确定位 ----------
+-- 同名不同品牌是两条独立药品记录，补货条目必须能指明"补哪一条"，
+-- 否则核销会按药名命中第一条，把库存写进错误记录。
+alter table public.shopping_list add column if not exists brand text;
+alter table public.shopping_list add column if not exists medicine_id text;
 
 -- ============================================================================
 -- 4. 行级安全策略 (RLS)

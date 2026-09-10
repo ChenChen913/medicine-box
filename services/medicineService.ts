@@ -110,6 +110,43 @@ function inferFormsFromName(name: string): Set<string> {
  *          推不出剂型，但药名「阿司匹林肠溶片」能推出片剂，胶囊录入即不匹配）；
  *  3. 其余情况（名称无包含关系）→ 一律不匹配，避免误伤相似名药品。
  */
+/**
+ * 判断某条待补货条目是否属于指定药品。
+ * 新数据带 medicine_id（精确命中）；旧数据退化到「药名 + 品牌」比对；
+ * 两者都没有时才只按药名（兼容历史备份）。
+ */
+export function isItemForMedicine(item: ShoppingItem, med: Medicine): boolean {
+  if (item.medicine_id) return String(item.medicine_id) === String(med.id);
+  if (item.brand !== undefined) return item.medicine_name === med.name && (item.brand ?? '') === (med.brand ?? '');
+  return item.medicine_name === med.name;
+}
+
+/**
+ * 按待补货条目定位要核销的药品。**绝不只按药名取第一条**——
+ * 同名不同品牌是两条独立记录，取首条会把库存写进错误的那条
+ * （真实缺陷：补货登记 5，结果未过期的甲牌被改成 5，真正缺货的乙牌仍为 0）。
+ */
+export function findMedicineForItem(meds: Medicine[], item: ShoppingItem): number {
+  if (item.medicine_id) {
+    const byId = meds.findIndex(m => String(m.id) === String(item.medicine_id));
+    if (byId !== -1) return byId;
+  }
+  if (item.brand !== undefined) {
+    const byBrand = meds.findIndex(m => m.name === item.medicine_name && (m.brand ?? '') === (item.brand ?? ''));
+    if (byBrand !== -1) return byBrand;
+  }
+  const candidates = meds
+    .map((m, i) => ({ m, i }))
+    .filter(x => x.m.name === item.medicine_name);
+  if (!candidates.length) return -1;
+  // 历史数据兜底：优先选"最需要补货"的那条（库存最少，其次效期最早）
+  candidates.sort(
+    (a, b) => (a.m.total_quantity - b.m.total_quantity)
+      || String(a.m.expiry_date).localeCompare(String(b.m.expiry_date))
+  );
+  return candidates[0].i;
+}
+
 export function isRestockMatch(
   itemName: string,
   med: Pick<Medicine, 'name' | 'form_type'>,
@@ -137,7 +174,12 @@ export function isRestockMatch(
 function settleMatchingRestocks(data: DBStructure, med: Medicine): string[] {
   const removed: string[] = [];
   const kept = data.shoppingList.filter(item => {
-    const hit = item.status === ShoppingStatus.PENDING && isRestockMatch(item.medicine_name, med, data.medicines);
+    if (item.status !== ShoppingStatus.PENDING) return true;
+    // 品牌/id 不匹配的条目不属于这条药品：同名不同品牌是两条独立记录，
+    // 给 A 入库不能顺手把 B 的补货提醒也核销掉。
+    if (item.medicine_id && String(item.medicine_id) !== String(med.id)) return true;
+    if (item.brand !== undefined && normBrand(item.brand) !== normBrand(med.brand)) return true;
+    const hit = isRestockMatch(item.medicine_name, med, data.medicines);
     if (hit && !removed.includes(item.medicine_name)) removed.push(item.medicine_name);
     return !hit;
   });
@@ -226,13 +268,19 @@ function localRead(): DBStructure | null {
   }
 }
 
+const WRITE_FAIL_MSG = '数据保存失败：本地存储写入被拒绝（空间可能不足，或浏览器禁用了存储），本次修改未保存';
+
 function localWrite(db: DBStructure): void {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify(db));
   } catch (e) {
     console.error('[localStorage] 写入失败：', e);
-    // 静默失败会让用户以为已保存，刷新后数据丢失。必须广播给 UI 提示。
+    // 两条通道都要给信号：
+    // 1) 广播事件给 UI 弹提示（qutoa 满/隐私模式等）；
+    // 2) 向上抛错——服务层返回值/异常通道必须能表达"没存上"，
+    //    否则任何非 UI 调用方（脚本、测试、非浏览器宿主）都会以为保存成功而丢数据。
     notifyStorageError('本地存储写入失败（空间可能不足，常见于大图片占用），本次修改未能保存');
+    throw new Error(WRITE_FAIL_MSG, { cause: e });
   }
 }
 
@@ -253,6 +301,9 @@ const num = (v: unknown): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 };
+
+/** 非负数字清洗：非法值兜底 0，负数归零（库存/阈值/用量/频率分不允许为负） */
+const nonNegNum = (v: unknown): number => Math.max(0, num(v));
 
 // 日期字段：数据库用 date 类型，这里统一成 YYYY-MM-DD
 const day = (v: unknown): string | null => {
@@ -312,6 +363,8 @@ function itemToRow(i: ShoppingItem): Row {
   return {
     id: String(i.id),
     medicine_name: i.medicine_name,
+    brand: i.brand || null,
+    medicine_id: i.medicine_id || null,
     reason: i.reason,
     status: i.status,
     created_at: i.created_at || new Date().toISOString(),
@@ -319,9 +372,13 @@ function itemToRow(i: ShoppingItem): Row {
 }
 
 function rowToItem(r: Row): ShoppingItem {
+  const brand = String(r.brand ?? '').trim();
+  const medicineId = String(r.medicine_id ?? '').trim();
   return {
     id: String(r.id),
     medicine_name: String(r.medicine_name ?? ''),
+    ...(brand ? { brand } : {}),
+    ...(medicineId ? { medicine_id: medicineId } : {}),
     reason: (r.reason as ShoppingItem['reason']) ?? '手动添加',
     status: (r.status as ShoppingStatus) ?? ShoppingStatus.PENDING,
     created_at: String(r.created_at ?? ''),
@@ -363,9 +420,9 @@ async function sbRead(): Promise<DBStructure> {
   if (s.error) throw s.error;
   if (l.error) throw l.error;
   return {
-    medicines: ((m.data as any[]) ?? []).map(rowToMed),
-    shoppingList: ((s.data as any[]) ?? []).map(rowToItem),
-    logs: ((l.data as any[]) ?? []).map(rowToLog),
+    medicines: ((m.data as Row[]) ?? []).map(rowToMed),
+    shoppingList: ((s.data as Row[]) ?? []).map(rowToItem),
+    logs: ((l.data as Row[]) ?? []).map(rowToLog),
   };
 }
 
@@ -377,7 +434,7 @@ async function sbSyncTable(table: string, rows: Row[]): Promise<void> {
   if (existing.error) throw existing.error;
 
   const nextIds = new Set(rows.map((r) => String(r.id)));
-  const removed = ((existing.data as any[]) ?? [])
+  const removed = ((existing.data as Row[]) ?? [])
     .map((r: Row) => String(r.id))
     .filter((id: string) => !nextIds.has(id));
 
@@ -446,13 +503,17 @@ function addExpiredToShoppingList(data: DBStructure): boolean {
 
   data.medicines.forEach(med => {
     if (med.expiry_date && med.expiry_date < today) {
+      // 去重必须精确到"这一条药品"：只按药名去重会让同名不同品牌的两条共用一个条目，
+      // 后续核销时无法区分该补哪一条（历史上会把库存写错记录）。
       const exists = data.shoppingList.find(
-        item => item.medicine_name === med.name && item.status === ShoppingStatus.PENDING
+        item => item.status === ShoppingStatus.PENDING && isItemForMedicine(item, med)
       );
       if (!exists) {
         data.shoppingList.push({
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           medicine_name: med.name,
+          ...(med.brand ? { brand: med.brand } : {}),
+          medicine_id: String(med.id),
           reason: '过期',
           status: ShoppingStatus.PENDING,
           created_at: new Date().toISOString(),
@@ -467,7 +528,13 @@ function addExpiredToShoppingList(data: DBStructure): boolean {
 
 export const MedicineService = {
   // --- 底层读写（对外保留，便于调试） ---
-  fetchData: async (): Promise<DBStructure> => (await readDB()) ?? EMPTY_DB(),
+  fetchData: async (): Promise<DBStructure> => {
+    const data = await readDB();
+    // 读取失败必须与"空药箱"可区分：旧写法 ?? EMPTY_DB() 会让调试/导出入口
+    // 把损坏存储当成空库，进而产出"空备份"误导用户。
+    if (!data) throw new Error(READ_FAIL_MSG);
+    return data;
+  },
 
   saveData: async (data: DBStructure): Promise<void> => writeDB(data),
 
@@ -503,19 +570,26 @@ export const MedicineService = {
    * 手动把药品加入补货清单（新 UI 的「加入待购」「一键生成采购单」使用）。
    * 幂等：同名药品已有待补货条目时跳过，返回实际新增条数。
    */
-  addToShoppingList: async (entries: { name: string; reason: ShoppingItem['reason'] }[]): Promise<number> => {
+  addToShoppingList: async (
+    entries: { name: string; reason: ShoppingItem['reason']; brand?: string; medicineId?: string }[]
+  ): Promise<number> => {
     const data = await readDB();
     if (!data) throw new Error(READ_FAIL_MSG);
 
     let added = 0;
-    entries.forEach(({ name, reason }) => {
+    entries.forEach(({ name, reason, brand, medicineId }) => {
       const exists = data.shoppingList.find(
-        item => item.medicine_name === name && item.status === ShoppingStatus.PENDING
+        item => item.status === ShoppingStatus.PENDING
+          && item.medicine_name === name
+          && (medicineId ? String(item.medicine_id ?? '') === String(medicineId) : true)
+          && (brand !== undefined ? (item.brand ?? '') === brand : true)
       );
       if (!exists) {
         data.shoppingList.push({
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           medicine_name: name,
+          ...(brand ? { brand } : {}),
+          ...(medicineId ? { medicine_id: String(medicineId) } : {}),
           reason,
           status: ShoppingStatus.PENDING,
           created_at: new Date().toISOString(),
@@ -576,11 +650,13 @@ export const MedicineService = {
     data.logs.push(newLog);
 
     if (target.total_quantity <= 0) {
-       const exists = data.shoppingList.find(item => item.medicine_name === target.name && item.status === ShoppingStatus.PENDING);
+       const exists = data.shoppingList.find(item => item.status === ShoppingStatus.PENDING && isItemForMedicine(item, target));
        if (!exists) {
          data.shoppingList.push({
             id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             medicine_name: target.name,
+            ...(target.brand ? { brand: target.brand } : {}),
+            medicine_id: String(target.id),
             reason: '用尽',
             status: ShoppingStatus.PENDING,
             created_at: new Date().toISOString()
@@ -596,7 +672,8 @@ export const MedicineService = {
   // 检查过期（保留为独立入口便于调试；常规路径已并入 getMedicines 内的 addExpiredToShoppingList）
   checkExpiry: async () => {
     const data = await readDB();
-    if (!data) return;
+    // 静默 return 会让调用方把"读取失败"当成"无需补货"，异常一律向上抛
+    if (!data) throw new Error(READ_FAIL_MSG);
     if (addExpiredToShoppingList(data)) {
       await writeDB(data);
     }
@@ -615,6 +692,15 @@ export const MedicineService = {
   addMedicine: async (med: Medicine): Promise<{ merged: boolean; offsetRestocks: string[] }> => {
     const data = await readDB();
     if (!data) throw new Error(READ_FAIL_MSG);
+
+    // 数量防御：与 consumeMedicine / restockMedicine 对称，负数会凭空造出负库存
+    const qty = Number(med.total_quantity);
+    if (!Number.isFinite(qty) || qty < 0) {
+      throw new Error('入库数量必须为不小于 0 的数字');
+    }
+    if (med.threshold !== undefined && med.threshold !== null && !Number.isFinite(Number(med.threshold))) {
+      throw new Error('预警阈值必须为数字');
+    }
 
     const idx = data.medicines.findIndex(m => isSameMedicineIdentity(m, med));
 
@@ -683,9 +769,17 @@ export const MedicineService = {
     // 同步清理该药品遗留的待补货条目，避免补货清单出现指向已删除药品的孤儿提醒。
     // 用药记录（logs）属于历史凭证，保留不清。
     if (target) {
-      data.shoppingList = data.shoppingList.filter(
-        item => !(item.medicine_name === target.name && item.status === ShoppingStatus.PENDING)
-      );
+      // 只清理"属于这条药品"的待补货条目：同名不同品牌是两条独立记录，
+      // 旧实现按药名一律删除，会把另一个品牌的过期提醒一起删掉。
+      const sameNameOthers = data.medicines.filter(m => m.name === target.name);
+      data.shoppingList = data.shoppingList.filter(item => {
+        if (item.status !== ShoppingStatus.PENDING) return true;
+        if (item.medicine_name !== target.name) return true;
+        if (item.medicine_id) return String(item.medicine_id) !== String(target.id);
+        if (item.brand !== undefined) return true; // 带品牌的旧条目归属其它品牌，保留
+        // 无 id 无品牌的旧条目：只有确认没有同名药品了才清理
+        return sameNameOthers.length > 0;
+      });
     }
     await writeDB(data);
   },
@@ -706,7 +800,7 @@ export const MedicineService = {
     data.shoppingList = data.shoppingList.filter(item => String(item.id) !== String(itemId));
 
     if (targetItem) {
-      const medIndex = data.medicines.findIndex(m => m.name === targetItem.medicine_name);
+      const medIndex = findMedicineForItem(data.medicines, targetItem);
       if (medIndex !== -1) {
         data.medicines[medIndex].total_quantity = qty;
         data.medicines[medIndex].expiry_date = expiry;
@@ -735,7 +829,10 @@ export const MedicineService = {
    * 服用说明等）与待补货清单、用药记录全部详细覆盖，无遗漏字段。
    */
   exportData: async (): Promise<string> => {
-    const data = (await readDB()) ?? EMPTY_DB();
+    const data = await readDB();
+    if (!data) {
+      throw new Error('读取失败，已中止导出：为保护现有数据，不能把「读不到」当成「空药箱」导出成空备份。请刷新后重试');
+    }
     const payload: ExportPayload = {
       app: 'medicine-box',
       version: EXPORT_VERSION,
@@ -772,6 +869,17 @@ export const MedicineService = {
 
     if (!dbRaw || !Array.isArray(dbRaw.medicines)) {
       throw new Error('备份文件缺少药品数据（medicines），不是本应用的有效备份');
+    }
+
+    // 版本校验：文件声明了 version 就必须是本应用支持的版本。
+    // 不校验会让未来版本/伪造版本的备份被静默接受，字段语义漂移后污染现有数据。
+    if (obj && typeof obj === 'object' && 'version' in obj) {
+      const fileVersion = (obj as Record<string, unknown>).version;
+      if (Number(fileVersion) !== EXPORT_VERSION) {
+        throw new Error(
+          `备份文件版本不受支持（文件版本：${String(fileVersion)}，当前支持：${EXPORT_VERSION}），请确认文件来源`
+        );
+      }
     }
 
     const result: ImportResult = {
@@ -857,9 +965,24 @@ const str = (v: unknown, fallback = ''): string =>
 
 /** YYYY-MM-DD 校验（导入清洗用：不合规日期一律置空，避免垃圾串参与过期比较） */
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * 真实存在的日历日期校验：DATE_RE 只保证"形状"是 4-2-2 位数字，
+ * 会让 2024-13-45 / 2025-02-30 / 0000-00-00 这类值原样入库，
+ * 且因字典序极大永远不满足 expiry_date < today —— 永远不会过期、永远进不了补货清单。
+ */
+function isValidCalendarDate(s: string): boolean {
+  if (!DATE_RE.test(s)) return false;
+  const [y, m, d] = s.split('-').map(Number);
+  if (y < 1900 || y > 2999 || m < 1 || m > 12 || d < 1) return false;
+  const isLeap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  const daysInMonth = [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return d <= daysInMonth[m - 1];
+}
+
 const date10 = (v: unknown): string => {
   const s = str(v).slice(0, 10);
-  return DATE_RE.test(s) ? s : '';
+  return isValidCalendarDate(s) ? s : '';
 };
 
 /**
@@ -893,16 +1016,16 @@ function sanitizeMedicine(raw: unknown): Medicine | null {
     form_type: formType,
     category: str(r.category, '其他'),
     location: str(r.location, '未知'),
-    total_quantity: num(r.total_quantity),
+    total_quantity: nonNegNum(r.total_quantity),
     unit: str(r.unit, '粒'),
-    threshold: num(r.threshold),
+    threshold: nonNegNum(r.threshold),
     expiry_date: date10(r.expiry_date),
     last_purchase_date: date10(r.last_purchase_date),
     symptoms_treated: str(r.symptoms_treated),
     dosage_instruction: str(r.dosage_instruction),
-    daily_usage: num(r.daily_usage),
+    daily_usage: nonNegNum(r.daily_usage),
     side_effects: str(r.side_effects, '详见说明书'),
-    usage_frequency_score: num(r.usage_frequency_score),
+    usage_frequency_score: nonNegNum(r.usage_frequency_score),
   };
 }
 
@@ -938,9 +1061,13 @@ function sanitizeItem(raw: unknown): ShoppingItem | null {
   const reason = ['过期', '用尽', '手动添加'].includes(str(r.reason))
     ? (r.reason as ShoppingItem['reason'])
     : '手动添加';
+  const brand = str(r.brand).trim();
+  const medicineId = str(r.medicine_id).trim();
   return {
     id,
     medicine_name: medicineName,
+    ...(brand ? { brand } : {}),
+    ...(medicineId ? { medicine_id: medicineId } : {}),
     reason,
     status: ShoppingStatus.PENDING,
     created_at: str(r.created_at) || new Date().toISOString(),
