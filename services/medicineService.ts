@@ -259,6 +259,9 @@ const LEGACY_DEMO_IDS = '1,10,11,12,13,14,15,16,17,18,19,2,20,3,4,5,6,7,8,9,seed
  * 21 条数据的集合比较可忽略不计，且幂等（清空后签名变成空串，自然不再匹配）。
  */
 function cleanupSeededDemoData(data: DBStructure): boolean {
+  // 演示数据清理只针对本机浏览器：云端是多设备共享数据，
+  // 不能凭某一台设备的指纹去清空整库（否则新设备首开就会抹掉其他设备的数据）。
+  if (isSupabaseConfigured) return false;
   const sig = data.medicines.map(m => String(m.id)).sort().join(',');
   if (sig !== LEGACY_DEMO_IDS) return false; // 不是演示数据 → 绝不改动
   data.medicines = [];
@@ -269,6 +272,10 @@ function cleanupSeededDemoData(data: DBStructure): boolean {
 }
 
 function resetForProduction(data: DBStructure): boolean {
+  // 一次性投产清空只适用于本机 localStorage：标记存在当前浏览器里，
+  // 而云端数据是所有设备共享的。若在 Supabase 模式下执行，任何一台
+  // 新设备（或清过浏览器数据的设备）首开都会把云端三张表全部清空。
+  if (isSupabaseConfigured) return false;
   try {
     if (localStorage.getItem(PROD_RESET_FLAG)) return false;
   } catch {
@@ -518,15 +525,21 @@ async function readDB(): Promise<DBStructure | null> {
   return localRead();
 }
 
+/** 云端写入失败的统一文案：不能宣称"已保存在本机"，因为云端模式下读取不会回退到本地副本 */
+const CLOUD_WRITE_FAIL_MSG = '云端写入失败，本次修改未保存，请检查网络后重试';
+
 async function writeDB(db: DBStructure): Promise<void> {
   if (isSupabaseConfigured) {
     try {
       await sbWrite(db);
       return;
     } catch (e) {
-      console.error('[Supabase] 写入失败，已回落到本地缓存：', e);
-      // 广播给 UI：用户需要知道云端没有保存成功，否则下次换设备会发现数据「丢了」
-      notifyStorageError('云端写入失败，本次修改仅保存在当前设备浏览器中，请检查网络');
+      console.error('[Supabase] 写入失败：', e);
+      // 旧实现会再写一份 localStorage 并提示"仅保存在本机"，但云端模式的
+      // readDB 只读云端、不会读这份本地副本，用户下次打开仍然看不到修改。
+      // 因此这里不再制造假象：明确告知未保存，并向上抛出让调用方感知失败。
+      notifyStorageError(CLOUD_WRITE_FAIL_MSG);
+      throw new Error(CLOUD_WRITE_FAIL_MSG, { cause: e });
     }
   }
   localWrite(db);
@@ -590,6 +603,29 @@ function addExpiredToShoppingList(data: DBStructure): boolean {
   }
 
   return hasChanges;
+}
+
+/**
+ * 入库与编辑共用的字段校验（UI 表单之外的最后一道防线）。
+ * 返回规范化后的药品名称；校验失败直接抛错，调用方不得写库。
+ * 编辑与入库走同一套规则，避免「入库校验、编辑不校验」的防御缺口。
+ */
+function validateMedicineFields(
+  med: Pick<Medicine, 'name' | 'total_quantity' | 'threshold'>
+): string {
+  // 名称防御：纯空格 / 全零宽字符的名称一律拒绝（UI 表单已校验，这里是脚本/导入通道的兜底）
+  const name = normalizeName(med.name);
+  if (!name) throw new Error('药品名称不能为空（或仅包含空白/零宽字符）');
+
+  // 数量防御：与 consumeMedicine / restockMedicine 对称，负数会凭空造出负库存
+  const qty = Number(med.total_quantity);
+  if (!Number.isFinite(qty) || qty < 0) {
+    throw new Error('库存数量必须为不小于 0 的数字');
+  }
+  if (med.threshold !== undefined && med.threshold !== null && !Number.isFinite(Number(med.threshold))) {
+    throw new Error('预警阈值必须为数字');
+  }
+  return name;
 }
 
 export const MedicineService = {
@@ -763,19 +799,8 @@ export const MedicineService = {
     const data = await readDB();
     if (!data) throw new Error(READ_FAIL_MSG);
 
-    // 名称防御：纯空格 / 全零宽字符的名称一律拒绝（UI 表单已校验，这里是脚本/导入通道的兜底）
-    const name = normalizeName(med.name);
-    if (!name) throw new Error('药品名称不能为空（或仅包含空白/零宽字符）');
+    const name = validateMedicineFields(med);
     const incoming: Medicine = { ...med, name };
-
-    // 数量防御：与 consumeMedicine / restockMedicine 对称，负数会凭空造出负库存
-    const qty = Number(med.total_quantity);
-    if (!Number.isFinite(qty) || qty < 0) {
-      throw new Error('入库数量必须为不小于 0 的数字');
-    }
-    if (med.threshold !== undefined && med.threshold !== null && !Number.isFinite(Number(med.threshold))) {
-      throw new Error('预警阈值必须为数字');
-    }
 
     const idx = data.medicines.findIndex(m => isSameMedicineIdentity(m, incoming));
 
@@ -819,12 +844,16 @@ export const MedicineService = {
     const idx = data.medicines.findIndex(m => String(m.id).trim() === targetId);
     if (idx === -1) return { offsetRestocks: [] };
 
+    // 编辑同样要过入库那套字段校验：UI 之外（脚本/导入/调试入口）不能绕过
+    const name = validateMedicineFields(med);
+
     const previous = opts?.previous;
     const stockIncreased =
       !!previous && Number(med.total_quantity) > Number(previous.total_quantity);
 
     const updated: Medicine = {
       ...med,
+      name,
       id: data.medicines[idx].id,
       ...(stockIncreased ? { last_purchase_date: todayDateString() } : {}),
     };

@@ -15,6 +15,7 @@
   4. 在 GitHub 仓库 Settings → Secrets 中配置 `VITE_SUPABASE_URL` 和 `VITE_SUPABASE_ANON_KEY`
   5. 重新触发 GitHub Actions 部署
 - **文件**：`supabase/schema.sql`（已包含建表语句 + RLS 策略）
+- **安全前提**：当前 RLS 对 anon 全开放，只适合家庭私有项目；公网多用户启用前必须先补账号体系与 `user_id` 隔离
 
 ### 方案二：Cloudflare Workers + D1（备选）
 - **状态**：⏸️ 待评估

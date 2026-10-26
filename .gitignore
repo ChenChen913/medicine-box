@@ -20,6 +20,9 @@ dist-ssr
 # AI 助手本地记忆（不属于项目代码）
 .workbuddy-ai/
 
+# README 事实台账（含内部备注，不提交到仓库）
+facts.md
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

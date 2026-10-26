@@ -10,7 +10,7 @@
 
 ## 一、项目背景速览
 
-- 技术栈：React 18 + Vite 5 + TypeScript（strict）+ TailwindCSS 3 + tailwindcss-animate；
+- 技术栈：React 18 + Vite 8.2.2 + TypeScript（strict）+ TailwindCSS 3 + tailwindcss-animate；
 - 存储：配置了 `VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY` 时走 Supabase（Postgres），
   否则自动降级为浏览器 `localStorage`（当前线上部署即此模式，密钥未配置）；
 - 部署：推送 `main` → GitHub Actions 构建 → GitHub Pages；

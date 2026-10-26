@@ -521,6 +521,40 @@ async function main() {
     });
     return '剂型参与身份判定';
   });
+  await run('A6', '修改：空白/零宽名称被拒绝，原记录保持不变', async () => {
+    seedDB();
+    await S.addMedicine(aMed);
+    const before = (await S.getMedicines())[0];
+    const r = await mustThrow(() => S.updateMedicine(Object.assign({}, before, { name: ' \u200B ' })));
+    const after = (await S.getMedicines())[0];
+    check(r.threw, {
+      expected: '抛错（名称不能为空）',
+      actual: '未抛错，返回 ' + j(r.value),
+      evidence: 'services/medicineService.ts validateMedicineFields（入库/编辑共用）',
+    });
+    check(after.name === before.name && after.total_quantity === before.total_quantity, {
+      expected: '原记录名称与库存保持不变',
+      actual: '名称=' + j(after.name) + ' 库存=' + j(after.total_quantity),
+    });
+    return describeError(r.error) + '；原记录未被改写';
+  });
+  await run('A7', '修改：负数库存被拒绝，原记录保持不变', async () => {
+    seedDB();
+    await S.addMedicine(aMed);
+    const before = (await S.getMedicines())[0];
+    const r = await mustThrow(() => S.updateMedicine(Object.assign({}, before, { total_quantity: -1 })));
+    const after = (await S.getMedicines())[0];
+    check(r.threw, {
+      expected: '抛错（库存不能为负）',
+      actual: '未抛错，返回 ' + j(r.value),
+      evidence: 'services/medicineService.ts validateMedicineFields（入库/编辑共用）',
+    });
+    check(after.total_quantity === before.total_quantity, {
+      expected: '原库存 ' + before.total_quantity + ' 保持不变',
+      actual: '库存=' + j(after.total_quantity),
+    });
+    return describeError(r.error) + '；原记录未被改写';
+  });
 
   // ----------------------------------------------------------
   line('');

@@ -97,14 +97,14 @@ flowchart LR
 
 ```sh
 npm run typecheck   # tsc --noEmit
-npm test            # 服务层 171 条 + UI 逻辑 91 条
+npm test            # 服务层 174 条 + UI 逻辑 91 条
 npm run lint        # eslint
 npm run build       # tsc && vite build
 npm run test:e2e    # 浏览器端 85 条（Puppeteer 驱动本机 Chrome）
 npm run test:all    # 类型检查 + 单元 + lint + 浏览器 E2E
 ```
 
-数字都由命令产生，可自行复现：`npm test` 输出 `TOTAL=171 PASS=171 FAIL=0` 与 `TOTAL=91 PASS=91 FAIL=0`；`npm run test:e2e` 输出 `E2E TOTAL=85 PASS=85 FAIL=0`。
+数字都由命令产生，可自行复现：`npm test` 输出 `TOTAL=174 PASS=174 FAIL=0` 与 `TOTAL=91 PASS=91 FAIL=0`；`npm run test:e2e` 输出 `E2E TOTAL=85 PASS=85 FAIL=0`。
 
 浏览器端覆盖：渲染与响应式（320 / 360 / 390 / 768 / 1440）、核心链路、对抗输入（投毒备份、XSS、存储配额写失败）、
 无障碍与键盘（焦点管理、Tab 锁定、24×24 目标尺寸、axe 扫描 10 个界面状态）、PWA 离线、历史缺陷回归墙。
@@ -134,7 +134,8 @@ A：详情抽屉与备份弹窗按需加载，空闲时会预取；弱网下首�
 
 - 默认单机存储：换设备不同步，清除浏览器数据会丢失（可用备份导入恢复）
 - 云端同步代码已就绪，但尚未配置 Supabase 账号，线上跑的是 localStorage 分支
-- 多标签页同时修改是 last-writer-wins，后写覆盖先写
+- 云端模式的数据库 RLS 对 anon 全开放，只适合家庭自建的私有 Supabase 项目；在公网启用多用户前，必须先补账号体系与 `user_id` 数据隔离
+- 云端整表同步与多标签页并发都是 last-writer-wins，后写覆盖先写
 - 不做用药提醒推送与闹钟
 - 仅作记录用途，不构成任何医疗建议
 - 首次打开是空药箱，需要自己录第一种药（仓库 `backup/` 里有历史演示数据可供测试导入）

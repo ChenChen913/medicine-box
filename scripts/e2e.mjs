@@ -55,6 +55,14 @@ function record(id, desc, ok, detail) {
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+/** 本地日历日期（YYYY-MM-DD）距今天数；期望天数不能写死，否则会随时间推移失效 */
+function daysSinceLocalDate(dateStr) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const from = new Date(`${dateStr}T00:00:00`);
+  return Math.round((today.getTime() - from.getTime()) / 86400000);
+}
+
 /* ---------------- 页面辅助 ---------------- */
 async function newPage(browser, w, h, mobile) {
   let b = await ensureBrowser();
@@ -661,10 +669,13 @@ async function main() {
       await openApp(p);
 
       // BUG-03 已过期天数
-      await p.evaluate((k, v) => { const d = JSON.parse(localStorage.getItem(k)); d.medicines.find(x => x.brand === '珠海联邦').expiry_date = v; localStorage.setItem(k, JSON.stringify(d)); }, DB_KEY, '2024-09-10');
+      // 期望值必须按当天动态计算：写死「730 天」会在 2026-09-11 之后必然失败（时间炸弹）。
+      const expiredFrom = '2024-09-10';
+      const expectedExpiredDays = daysSinceLocalDate(expiredFrom);
+      await p.evaluate((k, v) => { const d = JSON.parse(localStorage.getItem(k)); d.medicines.find(x => x.brand === '珠海联邦').expiry_date = v; localStorage.setItem(k, JSON.stringify(d)); }, DB_KEY, expiredFrom);
       await p.reload({ waitUntil: 'domcontentloaded' }); await sleep(2500);
       const seg = await p.evaluate(() => { const m = document.body.innerText.match(/珠海联邦[\s\S]{0,60}/); return m ? m[0].replace(/\n+/g, ' | ') : ''; });
-      record('BUG-03', '「已过期 N 天」天数正确（2024-09-10 → 730 天）', /已过期 730 天/.test(seg), seg.slice(0, 90));
+      record('BUG-03', `「已过期 N 天」天数正确（${expiredFrom} → ${expectedExpiredDays} 天）`, new RegExp('已过期 ' + expectedExpiredDays + ' 天').test(seg), seg.slice(0, 90));
 
       // BUG-04 空箱评级
       await p.evaluate(k => localStorage.setItem(k, JSON.stringify({ medicines: [], shoppingList: [], logs: [] })), DB_KEY);
