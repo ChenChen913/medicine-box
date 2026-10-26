@@ -72,7 +72,7 @@ npm run dev
 
 线上部署走 GitHub 仓库 Secrets 的同名变量，由 `.github/workflows/deploy.yml` 在构建时注入。
 
-Cloudflare Pages 主站由 `.github/workflows/cloudflare-pages.yml` 在 CI 通过后自动部署，仓库 Secrets 需要配置 `CLOUDFLARE_API_TOKEN` 与 `CLOUDFLARE_ACCOUNT_ID`。本地手动部署可运行 `npm run deploy:cf`（Wrangler 4.152 要求 Node 22+）。
+Cloudflare Pages 主站由 `.github/workflows/cloudflare-pages.yml` 在 CI 通过后自动部署，仓库 Secrets 需要配置 `CLOUDFLARE_API_TOKEN` 与 `CLOUDFLARE_ACCOUNT_ID`。本地手动部署可运行 `npm run deploy:cf`（Wrangler 4.152 要求 Node 22+）。迁移细节与验收记录见 [docs/CLOUDFLARE_MIGRATION.md](docs/CLOUDFLARE_MIGRATION.md)。
 
 ## 项目结构
 
