@@ -1,0 +1,5 @@
+# Cloudflare Pages 配置（纯静态站点，无 Functions）
+# 项目名必须与 Cloudflare Pages 中的项目一致；构建产物由 npm run build 生成到 dist/
+name = "medicine-box"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-10-27"

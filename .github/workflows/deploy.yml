@@ -41,9 +41,12 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
-      # 单页应用刷新兜底（本项目无路由，加上更稳妥）
-      - name: 复制 404 页面
-        run: cp dist/index.html dist/404.html
+      # 优先保留 public/404.html 自定义页；缺失时才用入口页兜底
+      - name: 检查 404 页面
+        run: |
+          if [ ! -f dist/404.html ]; then
+            cp dist/index.html dist/404.html
+          fi
 
       - name: 配置 Pages
         uses: actions/configure-pages@v5

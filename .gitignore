@@ -23,6 +23,11 @@ dist-ssr
 # README 事实台账（含内部备注，不提交到仓库）
 facts.md
 
+# Wrangler 本地状态（Cloudflare Pages 部署缓存）
+.wrangler/
+.dev.vars*
+
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

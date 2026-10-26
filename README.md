@@ -5,7 +5,9 @@
 
 记录家庭药品库存与效期，过期或用尽自动进入补货清单的本地优先 Web 应用
 
-**在线演示：** https://chenchen913.github.io/medicine-box/
+**在线演示：** https://medicine-box.pages.dev/（Cloudflare Pages 主站）
+
+**备用入口：** https://chenchen913.github.io/medicine-box/（GitHub Pages，仍保留可访问）
 
 ![家庭药箱桌面端首页：药箱状态概览、库存统计、搜索与分类筛选、药品卡片列表](docs/screenshot-desktop.png)
 
@@ -70,6 +72,8 @@ npm run dev
 
 线上部署走 GitHub 仓库 Secrets 的同名变量，由 `.github/workflows/deploy.yml` 在构建时注入。
 
+Cloudflare Pages 主站由 `.github/workflows/cloudflare-pages.yml` 在 CI 通过后自动部署，仓库 Secrets 需要配置 `CLOUDFLARE_API_TOKEN` 与 `CLOUDFLARE_ACCOUNT_ID`。本地手动部署可运行 `npm run deploy:cf`（Wrangler 4.152 要求 Node 22+）。
+
 ## 项目结构
 
 ```text
@@ -121,6 +125,9 @@ A：默认存在当前浏览器的 localStorage（键名 `smart-medicine-box:db:
 **Q：换手机或换电脑怎么办？**
 A：用「数据备份与恢复」导出 JSON，在新设备导入；或配置 Supabase 走云端同步。
 
+**Q：从 GitHub Pages 换到 Cloudflare 后，原来的数据还在吗？**
+A：两个域名是不同的 origin，浏览器不会共享 localStorage。请先在旧站「数据备份与恢复」导出 JSON，再在新站导入。云端数据不受域名变化影响。
+
 **Q：为什么不做后端？**
 A：家庭药箱是单人或家庭场景，本地优先能免去登录和部署成本；需要多设备时再启用 Supabase 分支即可，业务代码不用改。
 
@@ -133,6 +140,7 @@ A：详情抽屉与备份弹窗按需加载，空闲时会预取；弱网下首�
 ## 已知限制
 
 - 默认单机存储：换设备不同步，清除浏览器数据会丢失（可用备份导入恢复）
+- Cloudflare Pages 与 GitHub Pages 是两个独立 origin，localStorage、PWA 安装与 Service Worker 缓存都不互通；换站时需要导出/导入 JSON
 - 云端同步代码已就绪，但尚未配置 Supabase 账号，线上跑的是 localStorage 分支
 - 云端模式的数据库 RLS 对 anon 全开放，只适合家庭自建的私有 Supabase 项目；在公网启用多用户前，必须先补账号体系与 `user_id` 数据隔离
 - 云端整表同步与多标签页并发都是 last-writer-wins，后写覆盖先写

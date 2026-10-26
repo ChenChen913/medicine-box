@@ -24,6 +24,7 @@
     "test:ui": "node scripts/test-ui-logic.mjs",
     "test:e2e": "node scripts/e2e.mjs",
     "test:all": "npm run typecheck && npm test && npm run lint && npm run test:e2e",
+    "deploy:cf": "npm run build && npx wrangler@4.152.0 pages deploy dist --project-name=medicine-box --branch=main",
     "lint": "eslint ."
   },
   "dependencies": {
