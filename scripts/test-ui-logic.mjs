@@ -84,6 +84,7 @@ async function buildBundle() {
     define: {
       'import.meta.env.VITE_SUPABASE_URL': '""',
       'import.meta.env.VITE_SUPABASE_ANON_KEY': '""',
+      'import.meta.env.VITE_SYNC_API_URL': '""',
     },
     external: ['react', 'react-dom', '@supabase/supabase-js'],
     logLevel: 'warning',

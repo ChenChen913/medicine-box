@@ -34,7 +34,7 @@ export const MetricGrid: React.FC<{ o: HealthOverview; filter: FilterKey; onFilt
   return (
   <div className="lg:col-span-5 grid grid-cols-2 gap-2.5 md:gap-3">
     {METRIC_DEFS.map(def => {
-      const value = def.key === 'all' ? o.total : def.key === 'low' ? o.low + o.out : def.key === 'expired' ? o.expired : o.normal;
+      const value = def.key === 'all' ? o.total : def.key === 'low' ? o.low + o.out : def.key === 'expired' ? o.expired : o.normal - o.expiringSoon;
       const active = filter === def.key;
       return (
         <button
@@ -97,7 +97,7 @@ export const HealthBanner: React.FC<{ o: HealthOverview }> = ({ o }) => {
           ))}
         </div>
         <div className="flex items-center justify-between text-[11px] text-m3-on-surface-variant mt-1">
-          <span>安全常备 ({o.normal}种)</span>
+          <span>安全常备 ({o.normal - o.expiringSoon}种)</span>
           <span>库存告急 ({o.low + o.out}种)</span>
           <span>待处理过期 ({o.expired}种)</span>
         </div>
@@ -403,7 +403,7 @@ export const MobileHealthCard: React.FC<{ o: HealthOverview; filter: FilterKey; 
           { label: '全部储备种类', value: o.total, cls: 'bg-m3-surface-container-low', vCls: 'text-m3-on-surface', f: 'all' as FilterKey },
           { label: '库存告急', value: o.low + o.out, cls: 'bg-m3-tertiary-fixed/30', vCls: 'text-m3-tertiary', f: 'low' as FilterKey },
           { label: '已过期/待清理', value: o.expired, cls: 'bg-m3-error-container/40', vCls: 'text-m3-error', f: 'expired' as FilterKey },
-          { label: '正常备用', value: o.normal, cls: 'bg-m3-primary-fixed/40', vCls: 'text-m3-primary', f: 'normal' as FilterKey },
+          { label: '正常备用', value: o.normal - o.expiringSoon, cls: 'bg-m3-primary-fixed/40', vCls: 'text-m3-primary', f: 'normal' as FilterKey },
         ]).map(cell => (
           <button
             key={cell.label}

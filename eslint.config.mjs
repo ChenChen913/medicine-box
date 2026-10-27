@@ -37,6 +37,11 @@ export default tseslint.config(
     },
   },
   {
+    // Cloudflare Workers 使用 Service Worker 运行时全局对象（Response、URL、crypto 等）
+    files: ['sync-worker/**/*.js'],
+    languageOptions: { globals: { ...globals.serviceworker, ...globals.node } },
+  },
+  {
     // E2E 脚本跑在 node 里，但 page.evaluate 的回调体是浏览器上下文（会用到 document/window），
     // 所以两种 globals 都要给。
     files: ['scripts/e2e.mjs'],

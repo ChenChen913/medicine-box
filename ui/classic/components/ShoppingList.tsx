@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { MedicineService, localDateString } from '../../../services/medicineService';
 import { ShoppingItem, ShoppingStatus } from '../../../types';
 
@@ -7,6 +7,7 @@ const ShoppingList: React.FC = () => {
   const [restockItem, setRestockItem] = useState<ShoppingItem | null>(null);
   const [newQuantity, setNewQuantity] = useState<string>('');
   const [newExpiry, setNewExpiry] = useState<string>('');
+  const [loadError, setLoadError] = useState('');
 
   // 原因标签配色（避免嵌套三元，用映射表维护）
   const reasonTagStyle: Record<string, string> = {
@@ -15,19 +16,24 @@ const ShoppingList: React.FC = () => {
   };
   const getReasonTagStyle = (reason: string) => reasonTagStyle[reason] ?? 'bg-blue-50 text-blue-700 border-blue-100';
 
-  const loadList = async () => {
+  const loadList = useCallback(async () => {
     try {
       const all = await MedicineService.getShoppingList();
       // 用枚举常量而非字符串字面量，避免拼写漂移
       setItems(all.filter(i => i.status === ShoppingStatus.PENDING));
+      setLoadError('');
     } catch (e) {
       console.error('[ShoppingList] 清单加载失败：', e);
+      setLoadError(e instanceof Error ? e.message : '补货清单加载失败，请重试');
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadList();
-  }, []);
+    const onSyncData = () => { void loadList(); };
+    window.addEventListener('mb:sync-data', onSyncData);
+    return () => window.removeEventListener('mb:sync-data', onSyncData);
+  }, [loadList]);
 
   const openRestockDialog = (item: ShoppingItem) => {
     setRestockItem(item);
@@ -60,7 +66,12 @@ const ShoppingList: React.FC = () => {
         <span className="ml-3 bg-red-100 text-red-600 text-sm font-bold px-3 py-1 rounded-full">{items.length}</span>
       </h2>
 
-      {items.length === 0 ? (
+      {loadError ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex items-center justify-between gap-4" role="alert">
+          <span>{loadError}</span>
+          <button type="button" onClick={loadList} className="shrink-0 rounded-lg bg-red-500 px-4 py-2 font-bold text-white">重试</button>
+        </div>
+      ) : items.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl shadow-sm border border-dashed border-slate-200">
           <div className="text-4xl mb-4">🛒</div>
           <p className="text-slate-600 font-medium">目前没有需要补货的药品</p>

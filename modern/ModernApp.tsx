@@ -17,6 +17,7 @@ import { Icon } from './icons';
 import UISwitcher from '../ui/UISwitcher';
 import { useToasts, ToastStack } from './components/Toast';
 import { ConsumeDialog, DeleteDialog, MedicineForm } from './components/Dialogs';
+import { SyncStatusBadge } from './components/SyncStatusBadge';
 // Tab 视图是核心导航（底部导航栏直达），必须随首屏一起加载：
 // 之前拆成按需加载，弱网下点「需补货」要等分块下载才出内容（老板反馈"加载很长时间"）。
 import { RestockView, LogsView } from './components/Views';
@@ -155,6 +156,13 @@ const ModernApp: React.FC = () => {
     return () => window.removeEventListener('mb:storage-error', onStorageError);
   }, [showToast]);
 
+  // 云端出现新版本（后台轮询、连接/停用同步、版本冲突回滚）时统一刷新。
+  useEffect(() => {
+    const onSyncData = () => { void refreshData(); };
+    window.addEventListener('mb:sync-data', onSyncData);
+    return () => window.removeEventListener('mb:sync-data', onSyncData);
+  }, [refreshData]);
+
   // ESC 逐层关闭（删除确认 > 服药确认 > 抽屉），编辑表单不响应避免误触丢内容
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -266,6 +274,7 @@ const ModernApp: React.FC = () => {
             {navItems.map(item => <NavPill key={item.key} item={item} active={view === item.key} onSelect={switchView} />)}
           </nav>
           <div className="flex items-center gap-2">
+            <SyncStatusBadge onClick={() => setBackupOpen(true)} />
             <button
               type="button"
               onClick={() => setBackupOpen(true)}
@@ -291,6 +300,7 @@ const ModernApp: React.FC = () => {
       <header className="md:hidden px-4 pt-4 pb-1 flex items-center justify-between gap-2">
         {Logo}
         <div className="flex items-center gap-1.5 shrink-0">
+          <SyncStatusBadge onClick={() => setBackupOpen(true)} />
           <button
             type="button"
             onClick={() => switchView('logs')}
@@ -370,7 +380,7 @@ const ModernApp: React.FC = () => {
               <button type="button" onClick={reset} className="px-5 py-2.5 rounded-xl bg-m3-primary text-m3-on-primary font-semibold">重试</button>
             </div>
           )}>
-            {view === 'restock' && <RestockView onChanged={refreshData} />}
+            {view === 'restock' && <RestockView items={shopping} loading={loading} onChanged={refreshData} />}
             {view === 'logs' && <LogsView logs={logs} loading={loading} />}
           </ErrorBoundary>
 

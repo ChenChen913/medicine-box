@@ -566,7 +566,7 @@ async function main() {
         const keys = await caches.keys();
         return { active: !!(r && r.active), caches: keys };
       });
-      record('G5.2', 'Service Worker 已激活且缓存版本为 medicine-box-v2', sw.active && sw.caches.includes('medicine-box-v2'), JSON.stringify(sw));
+      record('G5.2', 'Service Worker 已激活且缓存版本为 medicine-box-v3', sw.active && sw.caches.includes('medicine-box-v3'), JSON.stringify(sw));
       await p.reload({ waitUntil: 'domcontentloaded' }); await sleep(1500);
       await p.setOfflineMode(true);
       let offlineOk = false;

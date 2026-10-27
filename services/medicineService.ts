@@ -1,13 +1,18 @@
 /**
  * 文件名: services/medicineService.ts
  * 功能: 核心业务逻辑层
- * 描述: 双后端 —— 配置了 Supabase 环境变量时走云端 Postgres（多设备同步），
- *       否则自动降级为浏览器 localStorage（单机可用）。
- *       本文件不再依赖任何本地 Express 服务，可直接部署为纯静态站点。
+ * 描述: 三种存储通道 —— 设置家庭同步密钥后走 Cloudflare D1（双站/多设备共享），
+ *       配置了 Supabase 环境变量时走云端 Postgres，否则使用浏览器 localStorage。
+ *       Cloudflare 通道以云端为唯一写入源，localStorage 只作离线只读镜像。
  */
 
 import { Medicine, ShoppingItem, UsageLog, FormType, ShoppingStatus } from '../types';
 import { isSupabaseConfigured, getSupabase } from './supabaseClient';
+import {
+  fetchSyncState, putSyncState, isCloudSyncEnabled, getSyncStatus,
+  saveSyncKey, clearSyncKey, markSyncApplied, SyncApiError,
+  type SyncState, type SyncDb,
+} from './syncClient';
 
 interface DBStructure {
   medicines: Medicine[];
@@ -261,7 +266,7 @@ const LEGACY_DEMO_IDS = '1,10,11,12,13,14,15,16,17,18,19,2,20,3,4,5,6,7,8,9,seed
 function cleanupSeededDemoData(data: DBStructure): boolean {
   // 演示数据清理只针对本机浏览器：云端是多设备共享数据，
   // 不能凭某一台设备的指纹去清空整库（否则新设备首开就会抹掉其他设备的数据）。
-  if (isSupabaseConfigured) return false;
+  if (isSupabaseConfigured || isCloudSyncEnabled()) return false;
   const sig = data.medicines.map(m => String(m.id)).sort().join(',');
   if (sig !== LEGACY_DEMO_IDS) return false; // 不是演示数据 → 绝不改动
   data.medicines = [];
@@ -275,7 +280,7 @@ function resetForProduction(data: DBStructure): boolean {
   // 一次性投产清空只适用于本机 localStorage：标记存在当前浏览器里，
   // 而云端数据是所有设备共享的。若在 Supabase 模式下执行，任何一台
   // 新设备（或清过浏览器数据的设备）首开都会把云端三张表全部清空。
-  if (isSupabaseConfigured) return false;
+  if (isSupabaseConfigured || isCloudSyncEnabled()) return false;
   try {
     if (localStorage.getItem(PROD_RESET_FLAG)) return false;
   } catch {
@@ -329,6 +334,32 @@ function localWrite(db: DBStructure): void {
     notifyStorageError('本地存储写入失败（空间可能不足，常见于大图片占用），本次修改未能保存');
     throw new Error(WRITE_FAIL_MSG, { cause: e });
   }
+}
+
+/** 云端模式的本机镜像只用于离线只读；镜像写失败不能把已经成功的云端操作报成失败。 */
+function localMirrorWrite(db: DBStructure): void {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(db));
+  } catch (e) {
+    console.warn('[localStorage] 离线镜像写入失败：', e);
+    notifyStorageError('云端数据已同步，但本机离线镜像保存失败（可能是存储空间不足）');
+  }
+}
+
+function hasLocalMirror(): boolean {
+  try { return localStorage.getItem(LS_KEY) !== null; } catch { return false; }
+}
+
+function cloneDb(db: DBStructure): DBStructure {
+  return JSON.parse(JSON.stringify(db)) as DBStructure;
+}
+
+function sanitizeSyncDb(raw: SyncDb): DBStructure {
+  return {
+    medicines: raw.medicines.map(sanitizeMedicine).filter((m): m is Medicine => m !== null),
+    shoppingList: raw.shoppingList.map(sanitizeItem).filter((i): i is ShoppingItem => i !== null),
+    logs: raw.logs.map(sanitizeLog).filter((l): l is UsageLog => l !== null),
+  };
 }
 
 // ==========================================================
@@ -508,12 +539,90 @@ async function sbWrite(db: DBStructure): Promise<void> {
 
 /** 读取失败的统一文案：宁可让操作失败，也不能拿空数据覆盖现有数据 */
 const READ_FAIL_MSG = '数据读取失败：存储不可达或内容已损坏，为保护现有数据已中止本次操作';
+const CLOUD_WRITE_FAIL_MSG = '云端写入失败，本次修改未保存，请检查网络后重试';
+
+// Cloudflare 云端快照的短缓存：一次 UI 刷新会连续读药品/清单/记录，
+// 共用同一份版本，既减少请求，也避免三张视图读到不同版本。
+let remoteCache: { data: DBStructure; version: number; fetchedAt: number } | null = null;
+const REMOTE_CACHE_MS = 1000;
+
+function decodeRemoteState(state: SyncState): DBStructure {
+  return state.data ? sanitizeSyncDb(state.data) : EMPTY_DB();
+}
+
+function sealProductionReset(): void {
+  try { localStorage.setItem(PROD_RESET_FLAG, new Date().toISOString()); } catch { /* ignore */ }
+}
+
+/** 后台轮询发现新版本后，由 App 调用：更新本机镜像并通知两套 UI 刷新。 */
+export function applyRemoteSnapshot(state: SyncState): void {
+  const data = decodeRemoteState(state);
+  remoteCache = { data: cloneDb(data), version: state.version, fetchedAt: Date.now() };
+  localMirrorWrite(data);
+  sealProductionReset();
+  markSyncApplied(state);
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('mb:sync-data'));
+}
+
+async function fetchRemoteFromCloud(): Promise<DBStructure> {
+  const state = await fetchSyncState();
+  const data = decodeRemoteState(state);
+  remoteCache = { data: cloneDb(data), version: state.version, fetchedAt: Date.now() };
+  localMirrorWrite(data);
+  return cloneDb(data);
+}
+
+/** 连接已有同步空间；云端不存在时，用本机数据创建。 */
+export async function connectCloudSync(key: string): Promise<{ created: boolean; medicines: number }> {
+  const normalized = key.trim();
+  const remote = await fetchSyncState(normalized);
+  if (remote.data) {
+    saveSyncKey(normalized);
+    applyRemoteSnapshot(remote);
+    return { created: false, medicines: remote.data.medicines.length };
+  }
+
+  const local = localRead();
+  if (!local) throw new Error(READ_FAIL_MSG);
+  const created = await putSyncState(local, 0, normalized);
+  saveSyncKey(normalized);
+  applyRemoteSnapshot(created);
+  return { created: true, medicines: local.medicines.length };
+}
+
+/** 停用同步后保留当前本机镜像，之后只写 localStorage。 */
+export function disconnectCloudSync(): void {
+  clearSyncKey();
+  remoteCache = null;
+  sealProductionReset();
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('mb:sync-data'));
+}
 
 /**
  * 读取整库。返回 null 表示「读取失败」，此时调用方必须放弃写入，
  * 避免用空数据覆盖掉已有数据。
  */
 async function readDB(): Promise<DBStructure | null> {
+  if (isCloudSyncEnabled()) {
+    if (remoteCache && Date.now() - remoteCache.fetchedAt < REMOTE_CACHE_MS) {
+      return cloneDb(remoteCache.data);
+    }
+    try {
+      return await fetchRemoteFromCloud();
+    } catch (e) {
+      // 网络/服务端不可用：有本机镜像时离线只读，绝不把离线镜像再写回云端。
+      if (e instanceof SyncApiError && (e.status === 0 || e.status >= 500) && hasLocalMirror()) {
+        const local = localRead();
+        if (local) {
+          remoteCache = { data: cloneDb(local), version: getSyncStatus().version, fetchedAt: Date.now() };
+          return local;
+        }
+      }
+      // 密钥/权限等客户端错误直接透出，方便用户纠正；其它失败走统一 READ_FAIL_MSG。
+      if (e instanceof SyncApiError && e.status > 0 && e.status < 500) throw e;
+      return null;
+    }
+  }
   if (isSupabaseConfigured) {
     try {
       return await sbRead();
@@ -525,19 +634,29 @@ async function readDB(): Promise<DBStructure | null> {
   return localRead();
 }
 
-/** 云端写入失败的统一文案：不能宣称"已保存在本机"，因为云端模式下读取不会回退到本地副本 */
-const CLOUD_WRITE_FAIL_MSG = '云端写入失败，本次修改未保存，请检查网络后重试';
-
 async function writeDB(db: DBStructure): Promise<void> {
+  if (isCloudSyncEnabled()) {
+    try {
+      if (!remoteCache) await fetchRemoteFromCloud();
+      const baseVersion = remoteCache?.version ?? 0;
+      const state = await putSyncState(db, baseVersion);
+      remoteCache = { data: cloneDb(db), version: state.version, fetchedAt: Date.now() };
+      localMirrorWrite(db);
+      return;
+    } catch (e) {
+      if (e instanceof SyncApiError) {
+        if (e.status === 409 && e.remote) applyRemoteSnapshot(e.remote);
+        throw new Error(e.message, { cause: e });
+      }
+      throw new Error(CLOUD_WRITE_FAIL_MSG, { cause: e });
+    }
+  }
   if (isSupabaseConfigured) {
     try {
       await sbWrite(db);
       return;
     } catch (e) {
       console.error('[Supabase] 写入失败：', e);
-      // 旧实现会再写一份 localStorage 并提示"仅保存在本机"，但云端模式的
-      // readDB 只读云端、不会读这份本地副本，用户下次打开仍然看不到修改。
-      // 因此这里不再制造假象：明确告知未保存，并向上抛出让调用方感知失败。
       notifyStorageError(CLOUD_WRITE_FAIL_MSG);
       throw new Error(CLOUD_WRITE_FAIL_MSG, { cause: e });
     }
@@ -648,19 +767,21 @@ export const MedicineService = {
     if (!data) throw new Error(READ_FAIL_MSG);
 
     let dirty = false;
+    const cloudOffline = isCloudSyncEnabled() && !getSyncStatus().online;
 
-    // 投产重置（一次性）：正式投入使用前清空演示/历史数据（见函数注释与 backup/README.md）
-    if (resetForProduction(data)) dirty = true;
-    // 清掉老设备里遗留的演示数据（按指纹识别；真实数据不受影响）
-    if (cleanupSeededDemoData(data)) dirty = true;
+    // 离线镜像只允许读取：过期检测可能产生补货写入，必须等恢复联网后执行，
+    // 否则一次断网刷新就会让页面报「保存失败」，也避免本地与云端分叉。
+    if (!cloudOffline) {
+      // 投产重置（一次性）：正式投入使用前清空演示/历史数据（见函数注释与 backup/README.md）
+      if (resetForProduction(data)) dirty = true;
+      // 清掉老设备里遗留的演示数据（按指纹识别；真实数据不受影响）
+      if (cleanupSeededDemoData(data)) dirty = true;
 
-    // 过期检测每次加载都执行（此前只在首次播种时运行，
-    // 导致药品后来过期时永远不会自动进入补货清单）。
-    // 同一数据对象上原地检测 + 单次写入，也修复了旧版
-    // 「checkExpiry 内部重读数据库再写回，随后被播种写回覆盖」的双写丢失问题。
-    if (addExpiredToShoppingList(data)) dirty = true;
+      // 过期检测每次加载都执行；同一数据对象原地修改，调用方单次写回。
+      if (addExpiredToShoppingList(data)) dirty = true;
 
-    if (dirty) await writeDB(data);
+      if (dirty) await writeDB(data);
+    }
     return data.medicines;
   },
 

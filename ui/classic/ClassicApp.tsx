@@ -5,13 +5,14 @@
  *       仅新增右上角以外的浮动切换入口，便于随时切到新版界面。
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Medicine } from '../../types';
 import { MedicineService, todayDateString, getCategoryWeight } from '../../services/medicineService';
 import MedicineCard from './components/MedicineCard';
 import ShoppingList from './components/ShoppingList';
 import AddMedicineForm from './components/AddMedicineForm';
 import { DataBackupDialog } from '../../modern/components/DataBackup';
+import { SyncStatusBadge } from '../../modern/components/SyncStatusBadge';
 import UISwitcher from '../UISwitcher';
 import { useDialogA11y } from '../../modern/useDialogA11y';
 
@@ -49,7 +50,7 @@ function App() {
   const [backupOpen, setBackupOpen] = useState(false);
 
   // 异步加载数据
-  const refreshData = async () => {
+  const refreshData = useCallback(async () => {
     try {
       let meds = await MedicineService.getMedicines();
       meds = MedicineService.sortMedicines(meds);
@@ -62,7 +63,7 @@ function App() {
         ? `${e.message} 请重试；若反复出现，可通过「数据备份与恢复」导出排查。`
         : '无法连接数据源。为防止用空数据覆盖云端，已暂停本次加载，请检查网络后重试。');
     }
-  };
+  }, []);
 
   // 监听服务层广播的存储错误（localStorage 配额不足 / 云端写入失败等）
   useEffect(() => {
@@ -95,7 +96,13 @@ function App() {
 
   useEffect(() => {
     refreshData();
-  }, [activeTab]);
+  }, [activeTab, refreshData]);
+
+  useEffect(() => {
+    const onSyncData = () => { void refreshData(); };
+    window.addEventListener('mb:sync-data', onSyncData);
+    return () => window.removeEventListener('mb:sync-data', onSyncData);
+  }, [refreshData]);
 
   const handleConsume = async () => {
     if (consumeMedId) {
@@ -220,6 +227,7 @@ function App() {
           </div>
           
           <div className="flex items-center gap-2">
+            <SyncStatusBadge onClick={() => setBackupOpen(true)} />
             {/* 数据备份与恢复：与新版 UI 同一功能（header 桌面端常显，移动端在 header 右侧） */}
             <button 
               onClick={() => setBackupOpen(true)}

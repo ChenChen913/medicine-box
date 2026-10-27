@@ -55,6 +55,12 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess, editingMed }) =>
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // accept 可被绕过：MIME 不是图片时不能读成 base64 入库（与新版表单同一防线）
+    if (!file.type.startsWith('image/')) {
+      alert('请选择图片文件');
+      e.target.value = '';
+      return;
+    }
     if (file.size > MAX_IMAGE_BYTES) {
       alert('图片太大，请选择 2MB 以内的图片');
       e.target.value = ''; // 允许用户重新选择同一文件
@@ -115,7 +121,7 @@ const AddMedicineForm: React.FC<Props> = ({ onClose, onSuccess, editingMed }) =>
           id: editingMed.id,
           usage_frequency_score: editingMed.usage_frequency_score
         };
-        await MedicineService.updateMedicine(updated);
+        await MedicineService.updateMedicine(updated, { previous: editingMed });
       } else {
         const newMed: Medicine = {
           id: Date.now().toString(),

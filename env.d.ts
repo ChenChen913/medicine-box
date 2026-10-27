@@ -12,6 +12,8 @@ interface ImportMetaEnv {
   readonly MODE: string;
   readonly VITE_SUPABASE_URL?: string;
   readonly VITE_SUPABASE_ANON_KEY?: string;
+  /** 可选：覆盖 Cloudflare 同步 Worker 地址，默认使用项目正式 Worker */
+  readonly VITE_SYNC_API_URL?: string;
 }
 
 interface ImportMeta {

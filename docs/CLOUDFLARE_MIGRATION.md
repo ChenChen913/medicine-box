@@ -50,6 +50,23 @@ Vite 保持 `base: './'`，同一份构建产物同时适配 Cloudflare 根路�
 - Supabase 未配置；若未来启用，云端数据不受站点域名变化影响，但需先完成账号与 `user_id` 隔离。
 - Service Worker 缓存和 PWA 安装同样按 origin 隔离，旧站与新站互不影响。
 
+## 4.1 双站共享数据（Cloudflare D1 + Worker）
+
+两个站点的 localStorage 天然隔离，因此新增了可选的 Cloudflare 同步通道：
+
+| 项 | 配置 |
+| --- | --- |
+| Worker | `https://medicine-box-sync.maomaotech913.workers.dev` |
+| 数据库 | D1 `medicine-box-db`，单表 `sync_states` |
+| 数据模型 | 每个家庭同步密钥对应一行版本化 JSON 快照 |
+| 密钥处理 | 前端只保存密钥原文；Worker 用 SHA-256 作为 `sync_id`，数据库不存原文 |
+| 写入 | 在线时立即写 D1；`baseVersion` 乐观锁，冲突返回 409 并刷新最新数据 |
+| 离线 | 只读本机镜像，禁止离线写入，避免两个 origin 各自修改后分叉 |
+| 同步频率 | 每 10 秒轮询，窗口聚焦/恢复在线时立即拉取 |
+| CORS | 仅允许 `medicine-box.pages.dev`、`*.medicine-box.pages.dev` 与 `chenchen913.github.io` |
+
+使用方式：一个站点生成密钥并连接，复制密钥到另一个站点连接。密钥等同于家庭数据密码，不能公开分享；丢失密钥后无法再读取该云端空间，但本机镜像仍在。
+
 ## 5. 自动化部署记录
 
 | 环节 | 结果 |

@@ -10,11 +10,13 @@
  *       默认使用新版界面的用户不必为它付出首屏 JS 体积（此前两套 UI 都打进入口 chunk）。
  */
 
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 import { UIModeProvider, useUIMode } from './ui/UIMode';
 import ModernApp from './modern/ModernApp';
 import { ErrorBoundary } from './modern/components/ErrorBoundary';
 import { lazyWithRetry } from './modern/lazyWithRetry';
+import { startSyncPolling } from './services/syncClient';
+import { applyRemoteSnapshot } from './services/medicineService';
 
 const ClassicApp = lazyWithRetry(() => import('./ui/classic/ClassicApp'));
 
@@ -47,6 +49,9 @@ function UIShell() {
 }
 
 function App() {
+  // 双站/多设备同步：后台只负责发现新版本，实际镜像与 UI 刷新由服务层统一处理。
+  useEffect(() => startSyncPolling(applyRemoteSnapshot), []);
+
   return (
     <UIModeProvider>
       <UIShell />

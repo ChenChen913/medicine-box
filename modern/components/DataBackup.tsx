@@ -10,8 +10,15 @@
  *       两版 UI 复用同一组件与 m3 token（tailwind content 已含全部源码目录）。
  */
 
-import React, { useRef, useState } from 'react';
-import { MedicineService, ExportPayload, ImportMode, ImportResult } from '../../services/medicineService';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  MedicineService, ExportPayload, ImportMode, ImportResult,
+  connectCloudSync, disconnectCloudSync, applyRemoteSnapshot,
+} from '../../services/medicineService';
+import {
+  fetchSyncState, generateSyncKey, getSyncKey, getSyncStatus,
+  type SyncStatus,
+} from '../../services/syncClient';
 import { ModalShell } from './Dialogs';
 import { Icon } from '../icons';
 
@@ -36,6 +43,61 @@ export const DataBackupDialog: React.FC<Props> = ({ onClose, onDone }) => {
   const [busy, setBusy] = useState(false);
   // 清空全部数据：两步确认（第一步展开红色警告区，第二步才真正执行）
   const [confirmClear, setConfirmClear] = useState(false);
+  // Cloudflare 双站同步：密钥只保存在当前 origin 的 localStorage，不进入代码或仓库
+  const [syncKeyInput, setSyncKeyInput] = useState('');
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(getSyncStatus);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
+
+  useEffect(() => {
+    const onStatus = (e: Event) => setSyncStatus((e as CustomEvent<SyncStatus>).detail);
+    window.addEventListener('mb:sync-status', onStatus);
+    return () => window.removeEventListener('mb:sync-status', onStatus);
+  }, []);
+
+  const handleConnectSync = async () => {
+    setSyncBusy(true);
+    setError('');
+    setSyncMessage('');
+    try {
+      const result = await connectCloudSync(syncKeyInput);
+      setSyncMessage(result.created
+        ? `已创建同步空间，并上传本机 ${result.medicines} 种药品。请复制密钥到另一个站点。`
+        : `已连接云端 ${result.medicines} 种药品。两个站点现在共享同一份数据。`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '同步连接失败，请检查网络与密钥');
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
+  const handleDisconnectSync = () => {
+    disconnectCloudSync();
+    setSyncMessage('已停用云同步。当前数据保留在本机，之后只保存到这个浏览器。');
+  };
+
+  const handleSyncNow = async () => {
+    setSyncBusy(true);
+    setError('');
+    try {
+      const remote = await fetchSyncState();
+      applyRemoteSnapshot(remote);
+      setSyncMessage(`已拉取最新数据（版本 ${remote.version}）`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '同步失败，请稍后重试');
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
+  const handleCopySyncKey = async () => {
+    try {
+      await navigator.clipboard.writeText(getSyncKey());
+      setSyncMessage('同步密钥已复制。请在另一个站点的同步设置中粘贴并连接。');
+    } catch {
+      setError('浏览器未允许复制，请检查剪贴板权限后重试');
+    }
+  };
 
   const handleExport = async () => {
     setBusy(true);
@@ -99,6 +161,72 @@ export const DataBackupDialog: React.FC<Props> = ({ onClose, onDone }) => {
   return (
     <ModalShell title="数据备份与恢复" subtitle="导出完整备份，或从备份文件恢复" icon="archive" onClose={onClose}>
       <div className="flex flex-col gap-5">
+        {/* Cloudflare 双站同步：Cloudflare Pages 与 GitHub Pages 共用 D1 云端数据 */}
+        <section className="rounded-2xl bg-m3-primary/5 p-4 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <Icon name="sync" className="w-[18px] h-[18px] text-m3-primary" />
+            <span className="text-sm font-bold text-m3-on-surface">双站云同步</span>
+            {syncStatus.configured && (
+              <span className={`text-[11px] font-semibold ${syncStatus.online ? 'text-m3-primary' : 'text-m3-tertiary'}`}>
+                {syncStatus.online ? '已连接' : '离线只读'}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-m3-on-surface-variant leading-relaxed">
+            Cloudflare 与 GitHub Pages 使用同一个家庭同步密钥后，会共享 Cloudflare D1 中的同一份数据。密钥不写入代码，只保存在当前浏览器。
+          </p>
+
+          {syncStatus.configured ? (
+            <>
+              <div className="text-[11px] text-m3-on-surface-variant leading-relaxed">
+                云端版本 {syncStatus.version}
+                {syncStatus.lastSyncedAt ? ` · 最近同步 ${new Date(syncStatus.lastSyncedAt).toLocaleString()}` : ''}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button type="button" onClick={handleCopySyncKey} className="h-10 rounded-xl bg-m3-primary text-m3-on-primary text-xs font-semibold">
+                  复制同步密钥
+                </button>
+                <button type="button" disabled={syncBusy} onClick={handleSyncNow} className="h-10 rounded-xl border border-m3-outline-variant text-m3-on-surface text-xs font-semibold disabled:opacity-50">
+                  {syncBusy ? '同步中…' : '立即同步'}
+                </button>
+              </div>
+              <button type="button" onClick={handleDisconnectSync} className="h-10 rounded-xl text-m3-error text-xs font-semibold hover:bg-m3-error-container/40">
+                停用同步（保留本机数据）
+              </button>
+            </>
+          ) : (
+            <>
+              <input
+                type="text"
+                value={syncKeyInput}
+                onChange={e => setSyncKeyInput(e.target.value.trim())}
+                placeholder="粘贴家庭同步密钥（至少 16 位）"
+                aria-label="家庭同步密钥"
+                autoComplete="off"
+                spellCheck={false}
+                className="h-11 px-3 rounded-xl border border-m3-outline-variant bg-m3-surface-container-lowest text-sm text-m3-on-surface outline-none focus:border-m3-primary"
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button type="button" onClick={() => setSyncKeyInput(generateSyncKey())} className="h-10 rounded-xl border border-m3-outline-variant text-m3-on-surface text-xs font-semibold">
+                  生成随机密钥
+                </button>
+                <button
+                  type="button"
+                  disabled={syncBusy || syncKeyInput.trim().length < 16}
+                  onClick={handleConnectSync}
+                  className="h-10 rounded-xl bg-m3-primary text-m3-on-primary text-xs font-semibold disabled:opacity-40"
+                >
+                  {syncBusy ? '连接中…' : '连接 / 创建同步空间'}
+                </button>
+              </div>
+              <p className="text-[11px] text-m3-on-surface-variant leading-relaxed">
+                云端已有数据时会连接并替换本机镜像；云端没有数据时，会把本机数据上传为新同步空间。
+              </p>
+            </>
+          )}
+          {syncMessage && <p className="text-xs text-m3-primary leading-relaxed" role="status">{syncMessage}</p>}
+        </section>
+
         {/* 导出 */}
         <section className="rounded-2xl bg-m3-surface-container-low/70 p-4 flex flex-col gap-2">
           <div className="flex items-center gap-2">

@@ -6,9 +6,8 @@
  *       - LogsView 用药记录（真实 usage_logs 数据，按日期倒序分组展示）
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { ShoppingItem, ShoppingStatus, UsageLog } from '../../types';
-import { MedicineService } from '../../services/medicineService';
+import React, { useMemo, useState } from 'react';
+import { ShoppingItem, UsageLog } from '../../types';
 import { formatLogTime } from '../ui';
 import { Icon } from '../icons';
 import { RestockDialog } from './Dialogs';
@@ -18,19 +17,12 @@ const REASON_STYLE: Record<string, string> = {
   '用尽': 'bg-m3-tertiary-fixed text-m3-on-tertiary-fixed-variant',
 };
 
-export const RestockView: React.FC<{ onChanged: () => void }> = ({ onChanged }) => {
-  const [items, setItems] = useState<ShoppingItem[]>([]);
-  const [loading, setLoading] = useState(true);
+export const RestockView: React.FC<{
+  items: ShoppingItem[];
+  loading: boolean;
+  onChanged: () => void;
+}> = ({ items, loading, onChanged }) => {
   const [restockItem, setRestockItem] = useState<ShoppingItem | null>(null);
-
-  const reloadItems = () =>
-    MedicineService.getShoppingList()
-      .then(all => setItems(all.filter(i => i.status === ShoppingStatus.PENDING)))
-      .catch(e => console.error('[RestockView] 清单刷新失败：', e));
-
-  useEffect(() => {
-    reloadItems().finally(() => setLoading(false));
-  }, []);
 
   return (
     <div className="max-w-3xl mx-auto px-4 md:px-0">
@@ -83,7 +75,6 @@ export const RestockView: React.FC<{ onChanged: () => void }> = ({ onChanged }) 
           onDone={() => {
             setRestockItem(null);
             onChanged();
-            reloadItems();
           }}
         />
       )}
